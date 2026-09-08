@@ -19,7 +19,6 @@ export async function subirFoto(uri, reporteId) {
   return obtenerUrlPublica(ruta);
 }
 
-// Aliaseo para coincidir con la nomenclatura del checklist [TI-11]
 export const uploadImage = subirFoto;
 
 export function obtenerUrlPublica(ruta) {

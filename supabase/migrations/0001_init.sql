@@ -1,15 +1,3 @@
--- ==========================================================
--- Cocha Reporta · Migración 0001 · Base de datos inicial
--- TD02 (Base de datos y servicios) · TD03 (Storage)
--- Zona piloto: Cala Cala, Distrito 12
---
--- Ejecutar en: Supabase Dashboard -> SQL Editor
--- Nota: esquema definitivo del grupo (fusiona las propuestas).
--- ==========================================================
-
--- ==========================================================
--- 1. TIPOS ENUMERADOS
--- ==========================================================
 CREATE TYPE public.rol_usuario AS ENUM ('ciudadano', 'admin');
 CREATE TYPE public.estado_usuario AS ENUM ('activo', 'suspendido', 'pendiente');
 
@@ -24,10 +12,10 @@ CREATE TYPE public.categoria_reporte AS ENUM (
 );
 
 CREATE TYPE public.estado_reporte AS ENUM (
-  'en_revision',         -- Recién enviado por el ciudadano
-  'realizando_trabajos', -- Cuadrilla asignada / en camino
-  'hecho',               -- Solucionado y verificado
-  'rechazado'            -- Reporte falso, duplicado o fuera de jurisdicción
+  'en_revision',         
+  'realizando_trabajos', 
+  'hecho',              
+  'rechazado'            
 );
 
 -- ==========================================================
@@ -236,18 +224,16 @@ INSERT INTO public.calles (zona_id, tipo, nombre) VALUES
 (1, 'Plazuela', 'Plaza de Cala Cala')
 ON CONFLICT (id) DO NOTHING;
 
--- ==========================================================
--- 9. STORAGE (TD03): bucket público para fotos de reportes
--- ==========================================================
+
 INSERT INTO storage.buckets (id, name, public, file_size_limit)
 VALUES ('fotos-reportes', 'fotos-reportes', TRUE, 5242880)
 ON CONFLICT (id) DO NOTHING;
 
--- Lectura pública de las fotos (para verlas sin login)
+
 CREATE POLICY "fotos lectura publica" ON storage.objects
   FOR SELECT USING (bucket_id = 'fotos-reportes');
 
--- Subida de fotos solo para usuarios autenticados
+
 CREATE POLICY "fotos subida autenticados" ON storage.objects
   FOR INSERT TO authenticated
   WITH CHECK (

@@ -1,7 +1,7 @@
 
 import { supabase } from "./supabase";
 
-// Categorías = enum `categoria_reporte` de la base de datos (HU02)
+// Categorías 
 export const CATEGORIAS_REPORTE = [
   { valor: "bache_asfalto", etiqueta: "Bache o Asfalto Deteriorado" },
   { valor: "alumbrado_publico", etiqueta: "Falla de Alumbrado Público" },
@@ -12,7 +12,7 @@ export const CATEGORIAS_REPORTE = [
   { valor: "otro", etiqueta: "Otro" },
 ];
 
-// Devuelve la lista de categorías para lugares que esperan una promesa
+// Devuelve la lista 
 export async function listarCategorias() {
   return CATEGORIAS_REPORTE.map((c) => c.valor);
 }
@@ -107,7 +107,7 @@ export async function crearReporte({
   return data;
 }
 
-// HU06 · Solo rol admin (los policies de RLS lo garantizan en el servidor)
+// Solo rol admin 
 export async function actualizarEstadoReporte(
   id,
   estado,
@@ -127,7 +127,7 @@ export async function actualizarEstadoReporte(
   return data;
 }
 
-// HU05 · Apoyo vecinal (+1) mediante RPC (sin duplicados, devuelve el total)
+// Apoyo vecinal (+1) mediante RPC (sin duplicados, devuelve el total)
 export async function apoyarReporte(reporteId) {
   const { data, error } = await supabase.rpc("apoyar_reporte", {
     p_reporte_id: reporteId,
@@ -136,7 +136,7 @@ export async function apoyarReporte(reporteId) {
   return data;
 }
 
-// HU03 · Conteo de reportes agrupado por calle (para el mapa)
+// Conteo de reportes agrupado por calle 
 export async function contarReportesPorCalle() {
   const { data, error } = await supabase
     .from("reportes")
