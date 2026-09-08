@@ -1,4 +1,4 @@
-// src/screens/ReportesScreen.js
+// src/screens/IncidenteScreen.js
 import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
@@ -7,13 +7,13 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
-import { REPORTES_EJEMPLO, ZONA_ACTUAL } from "../data/mockData";
+import { INCIDENTES_EJEMPLO, ZONA_ACTUAL } from "../data/mockData";
 import { supabase } from "../services/supabase";
 import { COLORS } from "../constants/theme";
 
-// [TI-08] Consulta de prueba (SELECT * FROM zonas) para validar conectividad
+// Consulta de prueba para validar conectividad con Supabase
 function ConsultaZonas() {
-  const [estado, setEstado] = useState("cargando"); // cargando | ok | error
+  const [estado, setEstado] = useState("cargando");
   const [mensaje, setMensaje] = useState("Verificando conexión con Supabase…");
 
   useEffect(() => {
@@ -27,7 +27,9 @@ function ConsultaZonas() {
         return;
       }
       setEstado("ok");
-      setMensaje(`Centro listo · ${data.length} zona(s) sincronizada(s) desde Supabase`);
+      setMensaje(
+        `Centro listo · ${data ? data.length : 0} zona(s) sincronizada(s)`,
+      );
     })();
     return () => {
       activo = false;
@@ -35,9 +37,17 @@ function ConsultaZonas() {
   }, []);
 
   const fondo =
-    estado === "ok" ? COLORS.greenBg : estado === "error" ? COLORS.redBg : "#F1F5F9";
+    estado === "ok"
+      ? COLORS.greenBg
+      : estado === "error"
+        ? COLORS.redBg
+        : "#F1F5F9";
   const texto =
-    estado === "ok" ? COLORS.green : estado === "error" ? COLORS.red : COLORS.textMuted;
+    estado === "ok"
+      ? COLORS.green
+      : estado === "error"
+        ? COLORS.red
+        : COLORS.textMuted;
 
   return (
     <View style={[styles.connectionBadge, { backgroundColor: fondo }]}>
@@ -49,12 +59,14 @@ function ConsultaZonas() {
   );
 }
 
-export default function ReportesScreen() {
-  const [reportes, setReportes] = useState(REPORTES_EJEMPLO);
+export default function IncidenteScreen() {
+  const [incidentes, setIncidentes] = useState(INCIDENTES_EJEMPLO);
 
   const handleApoyar = (id) => {
-    setReportes((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, apoyos: r.apoyos + 1 } : r)),
+    setIncidentes((prev) =>
+      prev.map((item) =>
+        item.id === id ? { ...item, apoyos: item.apoyos + 1 } : item,
+      ),
     );
   };
 
@@ -77,12 +89,12 @@ export default function ReportesScreen() {
         <Text style={styles.headerSub}>
           ZONA PILOTO: {ZONA_ACTUAL.nombre.toUpperCase()}
         </Text>
-        <Text style={styles.headerTitle}>Reportes Vecinales</Text>
+        <Text style={styles.headerTitle}>Incidentes Urbanos</Text>
         <ConsultaZonas />
       </View>
 
       <FlatList
-        data={reportes}
+        data={incidentes}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}

@@ -7,9 +7,9 @@ export const ZONA_ACTUAL = {
   lng_centro: -66.162534,
 };
 
-export const REPORTES_EJEMPLO = [
+export const INCIDENTES_EJEMPLO = [
   {
-    id: "rep-01",
+    id: "inc-01",
     calle_nombre: "Av. América",
     categoria_nombre: "Bache o Asfalto Deteriorado",
     titulo: "Bache profundo carril de bajada",
@@ -20,7 +20,7 @@ export const REPORTES_EJEMPLO = [
     created_at: "Hace 2 horas",
   },
   {
-    id: "rep-02",
+    id: "inc-02",
     calle_nombre: "Av. América",
     categoria_nombre: "Falla de Alumbrado Público",
     titulo: "Poste sin iluminación nocturna",
@@ -30,7 +30,7 @@ export const REPORTES_EJEMPLO = [
     created_at: "Ayer",
   },
   {
-    id: "rep-03",
+    id: "inc-03",
     calle_nombre: "Plaza de Cala Cala",
     categoria_nombre: "Acumulación de Basura",
     titulo: "Contenedor desbordado",

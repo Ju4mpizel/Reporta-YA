@@ -19,7 +19,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
       <View style={styles.barContainer}>
         {state.routes.map((route, index) => {
           const isFocused = state.index === index;
-          const isAction = route.name === "Reportar";
+          const isAction = route.name === "Incidentes";
 
           const onPress = () => {
             const event = navigation.emit({

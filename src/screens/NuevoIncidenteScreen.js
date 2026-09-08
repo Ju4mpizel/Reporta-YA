@@ -1,14 +1,15 @@
+// src/screens/NuevoIncidenteScreen.js
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { COLORS } from "../constants/theme";
 
-export default function NuevoReporteScreen() {
+export default function NuevoIncidenteScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>➕ Registrar Reporte</Text>
+      <Text style={styles.title}>➕ Registrar Incidente</Text>
       <Text style={styles.subtitle}>
         Aquí irá el formulario con los selectores de Calle (Cala Cala) y
-        Categorías de problemas.
+        Categorías de incidentes.
       </Text>
     </View>
   );
