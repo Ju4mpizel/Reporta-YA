@@ -1,5 +1,5 @@
 // src/screens/ReportesScreen.js
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,7 +8,46 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { REPORTES_EJEMPLO, ZONA_ACTUAL } from "../data/mockData";
+import { supabase } from "../services/supabase";
 import { COLORS } from "../constants/theme";
+
+// [TI-08] Consulta de prueba (SELECT * FROM zonas) para validar conectividad
+function ConsultaZonas() {
+  const [estado, setEstado] = useState("cargando"); // cargando | ok | error
+  const [mensaje, setMensaje] = useState("Verificando conexión con Supabase…");
+
+  useEffect(() => {
+    let activo = true;
+    (async () => {
+      const { data, error } = await supabase.from("zonas").select("*");
+      if (!activo) return;
+      if (error) {
+        setEstado("error");
+        setMensaje(`Error de conexión: ${error.message}`);
+        return;
+      }
+      setEstado("ok");
+      setMensaje(`Centro listo · ${data.length} zona(s) sincronizada(s) desde Supabase`);
+    })();
+    return () => {
+      activo = false;
+    };
+  }, []);
+
+  const fondo =
+    estado === "ok" ? COLORS.greenBg : estado === "error" ? COLORS.redBg : "#F1F5F9";
+  const texto =
+    estado === "ok" ? COLORS.green : estado === "error" ? COLORS.red : COLORS.textMuted;
+
+  return (
+    <View style={[styles.connectionBadge, { backgroundColor: fondo }]}>
+      <Text style={[styles.connectionText, { color: texto }]}>
+        {estado === "ok" ? "✓ " : estado === "error" ? "✗ " : "… "}
+        {mensaje}
+      </Text>
+    </View>
+  );
+}
 
 export default function ReportesScreen() {
   const [reportes, setReportes] = useState(REPORTES_EJEMPLO);
@@ -39,6 +78,7 @@ export default function ReportesScreen() {
           ZONA PILOTO: {ZONA_ACTUAL.nombre.toUpperCase()}
         </Text>
         <Text style={styles.headerTitle}>Reportes Vecinales</Text>
+        <ConsultaZonas />
       </View>
 
       <FlatList
@@ -100,6 +140,16 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: COLORS.textDark,
     marginTop: 4,
+  },
+  connectionBadge: {
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  connectionText: {
+    fontSize: 12,
+    fontWeight: "600",
   },
   card: {
     backgroundColor: COLORS.surface,
