@@ -1,9 +1,8 @@
-// src/services/supabase.js
+// Módulo singleton
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 import "react-native-url-polyfill/auto";
 
-// Mañana tu compañero solo pondrá aquí las credenciales reales del proyecto
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL || "https://TU_PROYECTO.supabase.co";
 const SUPABASE_ANON_KEY =
