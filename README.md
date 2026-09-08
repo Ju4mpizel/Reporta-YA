@@ -94,7 +94,7 @@ Escanea el código QR con la app **[Expo Go](https://expo.dev/go)** desde tu cel
 
 ## 👥 Equipo
 
-Proyecto desarrollado como trabajo académico de Ingeniería de Software.
+Proyecto para Programación IV.
 
 ---
 
