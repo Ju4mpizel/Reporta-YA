@@ -1,6 +1,6 @@
 <div align="center">
 
-# 📍 Cocha Reporta
+# 📍 Reporta YA!
 
 ### Reportando incidencias urbanas, construyendo una Cochabamba mejor.
 
@@ -24,11 +24,13 @@
 
 ## 🌆 Sobre el proyecto
 
-**Cocha Reporta** es una aplicación móvil ciudadana pensada para que cualquier vecino de Cochabamba pueda **reportar problemas urbanos** —baches, luminarias apagadas, alcantarillas obstruidas, acumulación de basura, entre otros— de forma rápida, visual y colaborativa.
+**Reporta YA!** es una aplicación móvil ciudadana pensada para que cualquier vecino de Cochabamba pueda **reportar problemas urbanos** —baches, luminarias apagadas, alcantarillas obstruidas, acumulación de basura, entre otros— de forma rápida, visual y colaborativa.
 
 La idea es simple: si lo ves, lo reportas. Y si otros vecinos ya lo vieron, lo respaldan con un **+1** para que gane visibilidad.
 
 La primera versión funciona como piloto en el **Distrito 12 (Cala Cala)**, con el objetivo de expandirse a toda la ciudad más adelante.
+
+> 💬 *Anteriormente conocido como "Cocha Reporta". Cambiamos de nombre para evitar confusión con otros proyectos existentes, pero la misión sigue siendo la misma.*
 
 <div align="center">
   <img src="https://img.shields.io/badge/📷_Capturas_de_pantalla-Próximamente-lightgrey?style=for-the-badge" alt="Capturas próximamente" />
@@ -94,7 +96,7 @@ Escanea el código QR con la app **[Expo Go](https://expo.dev/go)** desde tu cel
 
 ## 👥 Equipo
 
-Proyecto para Programación IV.
+Proyecto desarrollado como proyecto para Programación IV.
 
 ---
 
