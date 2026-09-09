@@ -13,13 +13,13 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
       pointerEvents="box-none"
       style={[
         styles.wrapper,
-        { paddingBottom: insets.bottom > 0 ? insets.bottom : 12 },
+        { paddingBottom: insets.bottom > 0 ? insets.bottom + 6 : 14 },
       ]}
     >
       <View style={styles.barContainer}>
         {state.routes.map((route, index) => {
           const isFocused = state.index === index;
-          const isAction = route.name === "Incidentes";
+          const isAction = route.name === "Reportar";
 
           const onPress = () => {
             const event = navigation.emit({
@@ -33,25 +33,25 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             }
           };
 
-          // Botón "+" destacado a la izquierda (relleno sólido primario)
+          // Botón "+" destacado central para registrar incidente
           if (isAction) {
             return (
-              <React.Fragment key={route.key}>
+              <View key={route.key} style={styles.navSlot}>
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={onPress}
                   style={styles.actionBox}
                 >
-                  <Plus size={22} color="#FFFFFF" strokeWidth={2.6} />
+                  <Plus size={22} color="#FFFFFF" strokeWidth={2.8} />
                 </TouchableOpacity>
-                <View style={styles.separator} />
-              </React.Fragment>
+              </View>
             );
           }
 
-          // Iconos de navegación restantes
-          let Icon = MapPin;
-          if (route.name === "Reportes") Icon = ClipboardList;
+          // Asignación precisa de iconos según las rutas actuales
+          let Icon = ClipboardList;
+          if (route.name === "Mapa") Icon = MapPin;
+          if (route.name === "Incidentes") Icon = ClipboardList;
           if (route.name === "Perfil") Icon = User;
 
           return (
@@ -62,7 +62,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
                 style={[styles.tabBox, isFocused && styles.tabBoxActive]}
               >
                 <Icon
-                  size={21}
+                  size={22}
                   color={isFocused ? COLORS.primary : "#94A3B8"}
                   strokeWidth={isFocused ? 2.4 : 1.9}
                 />
@@ -87,43 +87,38 @@ const styles = StyleSheet.create({
   barContainer: {
     flexDirection: "row",
     width: "90%",
-    maxWidth: 390,
+    maxWidth: 380,
     height: 64,
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
+    borderRadius: 24,
     alignItems: "center",
-    paddingHorizontal: 10,
+    justifyContent: "space-between",
+    paddingHorizontal: 8,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     elevation: 8,
     shadowColor: "#0F172A",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.1,
     shadowRadius: 10,
-  },
-  actionBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 2,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  separator: {
-    width: 1,
-    height: 28,
-    backgroundColor: "#E2E8F0",
-    marginHorizontal: 8,
   },
   navSlot: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
+  },
+  actionBox: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 4,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
   },
   tabBox: {
     width: 44,
@@ -134,6 +129,6 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
   },
   tabBoxActive: {
-    backgroundColor: "#E0F2FE", // Marco celeste pastel del mismo tamaño del botón '+'
+    backgroundColor: "#E0F2FE",
   },
 });

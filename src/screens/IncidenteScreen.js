@@ -7,11 +7,20 @@ import {
   FlatList,
   TouchableOpacity,
 } from "react-native";
+import {
+  ThumbsUp,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Wrench,
+  Check,
+  X,
+  Loader2,
+} from "lucide-react-native";
 import { INCIDENTES_EJEMPLO, ZONA_ACTUAL } from "../data/mockData";
 import { supabase } from "../services/supabase";
 import { COLORS } from "../constants/theme";
 
-// Consulta de prueba para validar conectividad con Supabase
 function ConsultaZonas() {
   const [estado, setEstado] = useState("cargando");
   const [mensaje, setMensaje] = useState("Verificando conexión con Supabase…");
@@ -42,7 +51,7 @@ function ConsultaZonas() {
       : estado === "error"
         ? COLORS.redBg
         : "#F1F5F9";
-  const texto =
+  const colorTexto =
     estado === "ok"
       ? COLORS.green
       : estado === "error"
@@ -51,10 +60,20 @@ function ConsultaZonas() {
 
   return (
     <View style={[styles.connectionBadge, { backgroundColor: fondo }]}>
-      <Text style={[styles.connectionText, { color: texto }]}>
-        {estado === "ok" ? "✓ " : estado === "error" ? "✗ " : "… "}
-        {mensaje}
-      </Text>
+      <View style={styles.connectionContent}>
+        {estado === "ok" && (
+          <Check size={14} color={colorTexto} strokeWidth={2.5} />
+        )}
+        {estado === "error" && (
+          <X size={14} color={colorTexto} strokeWidth={2.5} />
+        )}
+        {estado === "cargando" && (
+          <Loader2 size={14} color={colorTexto} strokeWidth={2.5} />
+        )}
+        <Text style={[styles.connectionText, { color: colorTexto }]}>
+          {mensaje}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -73,13 +92,33 @@ export default function IncidenteScreen() {
   const getBadge = (estado) => {
     switch (estado) {
       case "en_revision":
-        return { label: "En Revisión", bg: COLORS.amberBg, text: COLORS.amber };
+        return {
+          label: "En Revisión",
+          bg: COLORS.amberBg,
+          text: COLORS.amber,
+          Icon: Clock,
+        };
       case "realizando_trabajos":
-        return { label: "En Trabajos", bg: COLORS.blueBg, text: COLORS.blue };
+        return {
+          label: "En Trabajos",
+          bg: COLORS.blueBg,
+          text: COLORS.blue,
+          Icon: Wrench,
+        };
       case "hecho":
-        return { label: "Resuelto", bg: COLORS.greenBg, text: COLORS.green };
+        return {
+          label: "Resuelto",
+          bg: COLORS.greenBg,
+          text: COLORS.green,
+          Icon: CheckCircle2,
+        };
       default:
-        return { label: estado, bg: "#F1F5F9", text: COLORS.textMuted };
+        return {
+          label: estado,
+          bg: "#F1F5F9",
+          text: COLORS.textMuted,
+          Icon: AlertCircle,
+        };
     }
   };
 
@@ -96,15 +135,18 @@ export default function IncidenteScreen() {
       <FlatList
         data={incidentes}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: 16, paddingBottom: 100 }}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         renderItem={({ item }) => {
           const badge = getBadge(item.estado);
+          const BadgeIcon = badge.Icon;
+
           return (
             <View style={styles.card}>
               <View style={styles.cardTop}>
                 <Text style={styles.cardCalle}>{item.calle_nombre}</Text>
                 <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                  <BadgeIcon size={12} color={badge.text} strokeWidth={2.4} />
                   <Text style={[styles.badgeText, { color: badge.text }]}>
                     {badge.label}
                   </Text>
@@ -115,11 +157,17 @@ export default function IncidenteScreen() {
               <View style={styles.cardFooter}>
                 <Text style={styles.cardDate}>{item.created_at}</Text>
                 <TouchableOpacity
+                  activeOpacity={0.8}
                   style={styles.btnApoyo}
                   onPress={() => handleApoyar(item.id)}
                 >
+                  <ThumbsUp
+                    size={14}
+                    color={COLORS.primaryDark}
+                    strokeWidth={2.2}
+                  />
                   <Text style={styles.btnApoyoText}>
-                    👍 Apoyar ({item.apoyos})
+                    Apoyar ({item.apoyos})
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -159,9 +207,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
   },
+  connectionContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   connectionText: {
     fontSize: 12,
     fontWeight: "600",
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 120, // Espacio suficiente para no chocar con la TabBar flotante
   },
   card: {
     backgroundColor: COLORS.surface,
@@ -184,7 +241,14 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     textTransform: "uppercase",
   },
-  badge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
   badgeText: { fontSize: 11, fontWeight: "700" },
   cardTitle: {
     fontSize: 16,
@@ -208,6 +272,9 @@ const styles = StyleSheet.create({
   },
   cardDate: { fontSize: 12, color: "#94A3B8" },
   btnApoyo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: COLORS.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
