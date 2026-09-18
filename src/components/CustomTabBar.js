@@ -2,7 +2,13 @@
 import React from "react";
 import { View, TouchableOpacity, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { MapPin, ClipboardList, Plus, User } from "lucide-react-native";
+import {
+  MapPin,
+  ClipboardList,
+  Plus,
+  User,
+  ShieldAlert,
+} from "lucide-react-native";
 import { COLORS } from "../constants/theme";
 
 export default function CustomTabBar({ state, descriptors, navigation }) {
@@ -10,10 +16,9 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 
   return (
     <View
-      pointerEvents="box-none"
       style={[
         styles.wrapper,
-        { paddingBottom: insets.bottom > 0 ? insets.bottom + 6 : 14 },
+        { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 },
       ]}
     >
       <View style={styles.barContainer}>
@@ -33,7 +38,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             }
           };
 
-          // Botón "+" destacado central para registrar incidente
+          // Botón "+" destacado central/izquierdo para registrar incidente
           if (isAction) {
             return (
               <View key={route.key} style={styles.navSlot}>
@@ -48,11 +53,13 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             );
           }
 
-          // Asignación precisa de iconos según las rutas actuales
+          // Asignación de iconos
           let Icon = ClipboardList;
           if (route.name === "Mapa") Icon = MapPin;
           if (route.name === "Incidentes") Icon = ClipboardList;
           if (route.name === "Perfil") Icon = User;
+          if (route.name === "Panel" || route.name === "Admin")
+            Icon = ShieldAlert;
 
           return (
             <View key={route.key} style={styles.navSlot}>
@@ -62,7 +69,7 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
                 style={[styles.tabBox, isFocused && styles.tabBoxActive]}
               >
                 <Icon
-                  size={22}
+                  size={21}
                   color={isFocused ? COLORS.primary : "#94A3B8"}
                   strokeWidth={isFocused ? 2.4 : 1.9}
                 />
@@ -77,18 +84,17 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 
 const styles = StyleSheet.create({
   wrapper: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+    // Se elimina position: "absolute" para que ocupe su propio bloque
+    backgroundColor: COLORS.background, // Mismo fondo que la app para que la pastilla resalte
     alignItems: "center",
     justifyContent: "center",
+    paddingTop: 8,
   },
   barContainer: {
     flexDirection: "row",
     width: "90%",
-    maxWidth: 380,
-    height: 64,
+    maxWidth: 390,
+    height: 60,
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     alignItems: "center",
@@ -108,9 +114,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   actionBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
@@ -121,9 +127,9 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
   },
   tabBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
