@@ -16,7 +16,6 @@ import {
   Building2,
   Clock,
   ThumbsUp,
-  MapPin,
   User,
   Image as ImageIcon,
   ChevronDown,
@@ -120,26 +119,25 @@ export default function GestionIncidenteScreen({ route, navigation }) {
 
   return (
     <View style={styles.screenWrapper}>
+      {/* Header Institucional Oscuro Coherente */}
+      <View style={styles.headerDark}>
+        <TouchableOpacity
+          style={styles.btnBack}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.7}
+        >
+          <ArrowLeft size={16} color="#38BDF8" strokeWidth={2.4} />
+          <Text style={styles.btnBackText}>Volver a la Bandeja</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerSub}>GESTIÓN OPERATIVA · DISTRITO 12</Text>
+        <Text style={styles.headerTitle}>Asignar y Dictaminar</Text>
+      </View>
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Superior Limpio */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.btnBack}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}
-          >
-            <ArrowLeft size={16} color={COLORS.primary} strokeWidth={2.4} />
-            <Text style={styles.btnBackText}>Volver a la Bandeja</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerSub}>GESTIÓN OPERATIVA · D-12</Text>
-          <Text style={styles.headerTitle}>Asignar y Dictaminar</Text>
-        </View>
-
-        {/* Resumen de Incidente */}
         <View style={styles.summaryCard}>
           <View style={styles.imgPlaceholder}>
             <ImageIcon size={22} color="#94A3B8" />
@@ -163,7 +161,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* 1. ACORDEÓN: DEPARTAMENTO */}
+        {/* Paso 1: Departamento */}
         <View style={styles.accordionContainer}>
           <TouchableOpacity
             style={styles.accordionHeader}
@@ -266,7 +264,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
           )}
         </View>
 
-        {/* 2. ACORDEÓN: ESTADO */}
+        {/* Paso 2: Estado */}
         <View style={styles.accordionContainer}>
           <TouchableOpacity
             style={styles.accordionHeader}
@@ -328,7 +326,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
           )}
         </View>
 
-        {/* 3. NOTA OFICIAL */}
+        {/* Paso 3: Nota Alcaldía */}
         <View style={styles.formGroup}>
           <Text style={styles.formLabel}>
             PASO 3 · NOTA OFICIAL DE LA ALCALDÍA
@@ -345,7 +343,6 @@ export default function GestionIncidenteScreen({ route, navigation }) {
           />
         </View>
 
-        {/* Botón Principal */}
         <TouchableOpacity
           style={[styles.btnSubmit, guardando && styles.btnDisabled]}
           onPress={handleGuardar}
@@ -407,11 +404,13 @@ export default function GestionIncidenteScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1, backgroundColor: COLORS.background },
-  container: { flex: 1 },
-  content: { padding: SPACING.lg, paddingBottom: SPACING.bottomInset },
-  header: {
-    paddingTop: 45,
-    marginBottom: SPACING.md,
+  headerDark: {
+    backgroundColor: "#0F172A",
+    paddingHorizontal: SPACING.lg,
+    paddingTop: 52,
+    paddingBottom: SPACING.md,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
   },
   btnBack: {
     flexDirection: "row",
@@ -419,20 +418,21 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 6,
   },
-  btnBackText: { fontSize: 12, fontWeight: "700", color: COLORS.primary },
+  btnBackText: { fontSize: 12, fontWeight: "700", color: "#38BDF8" },
   headerSub: {
     fontSize: 10,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: "#38BDF8",
     letterSpacing: 1,
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: "800",
-    color: COLORS.textDark,
+    fontWeight: "900",
+    color: "#FFFFFF",
     marginTop: 2,
   },
-
+  container: { flex: 1 },
+  content: { padding: SPACING.lg, paddingBottom: SPACING.bottomInset },
   summaryCard: {
     flexDirection: "row",
     gap: SPACING.sm,

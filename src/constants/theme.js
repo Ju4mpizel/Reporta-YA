@@ -39,13 +39,16 @@ export const SPACING = {
   lg: 16,
   xl: 20,
   xxl: 24,
-  bottomBarPadding: 120, // Espacio para que el contenido no choque con la barra
+  bottomBarPadding: 120,
+  bottomInset: 120, // Alias para compatibilidad con las pantallas
 };
 
 export const RADIUS = {
+  xs: 4,
   sm: 6,
   md: 10,
   lg: 14,
   xl: 18,
   full: 9999,
+  pill: 9999, // Alias para compatibilidad con los badges tipo pastilla
 };

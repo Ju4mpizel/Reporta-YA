@@ -6,12 +6,13 @@ import {
   View,
   ActivityIndicator,
   Platform,
+  TouchableOpacity,
+  ScrollView,
 } from "react-native";
-import { MapPin, Info } from "lucide-react-native";
+import { MapPin, Info, Navigation, ExternalLink } from "lucide-react-native";
 import { supabase } from "../services/supabase";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
 
-// Coordenadas centro: Cala Cala (Distrito 12, Cochabamba)
 const CALA_CALA_LAT = -17.3734;
 const CALA_CALA_LNG = -66.1625;
 
@@ -22,7 +23,6 @@ export default function MapaScreen({ navigation }) {
   useEffect(() => {
     cargarIncidentes();
 
-    // Listener para eventos emitidos desde el iframe interactivo en entorno Web
     const handleMessage = (event) => {
       try {
         const data =
@@ -32,9 +32,7 @@ export default function MapaScreen({ navigation }) {
             incidenteIdSeleccionado: data.id,
           });
         }
-      } catch (err) {
-        // Ignorar mensajes no relacionados
-      }
+      } catch (err) {}
     };
 
     if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -79,7 +77,6 @@ export default function MapaScreen({ navigation }) {
     }
   }
 
-  // Generación de HTML interactivo con Leaflet y OpenStreetMap (Cochabamba)
   const generarMapaHTML = () => {
     const marcadoresJS = incidentes
       .map(
@@ -114,12 +111,10 @@ export default function MapaScreen({ navigation }) {
               maxZoom: 18
             });
 
-            // Baldosas reales de OpenStreetMap
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
               attribution: '© OpenStreetMap Cochabamba'
             }).addTo(map);
 
-            // Marcadores dinámicos desde Supabase
             ${marcadoresJS}
           </script>
         </body>
@@ -129,7 +124,6 @@ export default function MapaScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerBadge}>
           <MapPin size={12} color={COLORS.primary} strokeWidth={2.4} />
@@ -137,11 +131,10 @@ export default function MapaScreen({ navigation }) {
         </View>
         <Text style={styles.headerTitle}>Mapa Interactivo</Text>
         <Text style={styles.headerHint}>
-          Desliza, haz zoom y toca un marcador para inspeccionar el incidente
+          Puntos georreferenciados para atención territorial
         </Text>
       </View>
 
-      {/* Visor de Mapa Interactivo */}
       <View style={styles.mapContainer}>
         {cargando ? (
           <View style={styles.centerBox}>
@@ -150,19 +143,43 @@ export default function MapaScreen({ navigation }) {
               Cargando cartografía urbana...
             </Text>
           </View>
-        ) : (
+        ) : Platform.OS === "web" ? (
           <iframe
             srcDoc={generarMapaHTML()}
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
+            style={{ width: "100%", height: "100%", border: "none" }}
             title="Mapa de Cala Cala"
           />
+        ) : (
+          <ScrollView contentContainerStyle={styles.mobileFallbackContent}>
+            <View style={styles.fallbackCard}>
+              <Navigation size={28} color={COLORS.primary} />
+              <Text style={styles.fallbackTitle}>Vista Territorial Activa</Text>
+              <Text style={styles.fallbackDesc}>
+                {incidentes.length} reportes georreferenciados en Cala Cala.
+              </Text>
+            </View>
+
+            {incidentes.map((inc) => (
+              <TouchableOpacity
+                key={inc.id}
+                style={styles.incidentePinItem}
+                activeOpacity={0.7}
+                onPress={() =>
+                  navigation.navigate("Incidentes", {
+                    incidenteIdSeleccionado: inc.id,
+                  })
+                }
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pinCalle}>{inc.calle}</Text>
+                  <Text style={styles.pinTitulo}>{inc.titulo}</Text>
+                </View>
+                <ExternalLink size={14} color={COLORS.primary} />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
         )}
 
-        {/* Notificación flotante informativa */}
         <View style={styles.footerBadge}>
           <Info size={13} color={COLORS.textDark} />
           <Text style={styles.footerText}>
@@ -198,11 +215,9 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 22, fontWeight: "800", color: COLORS.textDark },
   headerHint: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
-
   mapContainer: { flex: 1, position: "relative" },
   centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
-
   footerBadge: {
     position: "absolute",
     top: 12,
@@ -219,4 +234,47 @@ const styles = StyleSheet.create({
     zIndex: 999,
   },
   footerText: { fontSize: 11, fontWeight: "700", color: COLORS.textDark },
+  mobileFallbackContent: {
+    padding: SPACING.lg,
+    paddingBottom: SPACING.bottomInset,
+  },
+  fallbackCard: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.lg,
+    borderRadius: RADIUS.md,
+    alignItems: "center",
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  fallbackTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: COLORS.textDark,
+    marginTop: 6,
+  },
+  fallbackDesc: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  incidentePinItem: {
+    backgroundColor: COLORS.surface,
+    padding: SPACING.md,
+    borderRadius: RADIUS.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  pinCalle: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.primary,
+    textTransform: "uppercase",
+  },
+  pinTitulo: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: COLORS.textDark,
+    marginTop: 2,
+  },
 });

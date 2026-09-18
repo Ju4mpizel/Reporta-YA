@@ -37,17 +37,15 @@ export default function IncidenteScreen({ route }) {
   const [refrescando, setRefrescando] = useState(false);
 
   const [zonaActiva] = useState("Cala Cala");
-  const [calleFiltro] = useState("Todas");
-  const [categoriaFiltro] = useState("Todas");
+  const [calleFiltro, setCalleFiltro] = useState("Todas");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
 
-  // Recarga automática al enfocar la pantalla o regresar desde otra vista
   useFocusEffect(
     useCallback(() => {
       cargarIncidentes();
     }, []),
   );
 
-  // Autoscroll hacia el incidente seleccionado desde el mapa
   useEffect(() => {
     if (incidenteIdSeleccionado && incidentes.length > 0) {
       const index = incidentes.findIndex(
@@ -110,6 +108,15 @@ export default function IncidenteScreen({ route }) {
       setRefrescando(false);
     }
   }
+
+  // Filtrado reactivo en memoria
+  const incidentesFiltrados = incidentes.filter((item) => {
+    const coincideCalle =
+      calleFiltro === "Todas" || item.calle_nombre === calleFiltro;
+    const coincideCat =
+      categoriaFiltro === "Todas" || item.categoria_nombre === categoriaFiltro;
+    return coincideCalle && coincideCat;
+  });
 
   const handleApoyar = async (incidenteId) => {
     if (!perfil?.id) {
@@ -188,7 +195,6 @@ export default function IncidenteScreen({ route }) {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerSub}>
           ZONA PILOTO: {zonaActiva.toUpperCase()}
@@ -196,17 +202,16 @@ export default function IncidenteScreen({ route }) {
         <Text style={styles.headerTitle}>Incidentes Urbanos</Text>
       </View>
 
-      {/* Filtros en Acordeón */}
+      {/* Filtros Acordeón Interactivos */}
       <FiltrosAcordeon
         zonaSeleccionada={zonaActiva}
         calleSeleccionada={calleFiltro}
         categoriaSeleccionada={categoriaFiltro}
         onPressZona={() => {}}
-        onPressCalle={() => {}}
-        onPressCategoria={() => {}}
+        onPressCalle={(calle) => setCalleFiltro(calle)}
+        onPressCategoria={(cat) => setCategoriaFiltro(cat)}
       />
 
-      {/* Feed de Incidentes */}
       {cargando ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
@@ -215,7 +220,7 @@ export default function IncidenteScreen({ route }) {
       ) : (
         <FlatList
           ref={flatListRef}
-          data={incidentes}
+          data={incidentesFiltrados}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -264,7 +269,6 @@ export default function IncidenteScreen({ route }) {
                 <Text style={styles.cardTitle}>{item.titulo}</Text>
                 <Text style={styles.cardDesc}>{item.descripcion}</Text>
 
-                {/* Unidad Municipal Asignada */}
                 {item.departamento_nombre && (
                   <View style={styles.dptoBadge}>
                     <Building2 size={12} color={COLORS.textDark} />
@@ -274,7 +278,6 @@ export default function IncidenteScreen({ route }) {
                   </View>
                 )}
 
-                {/* Nota Oficial de la Alcaldía */}
                 {item.nota_alcaldia ? (
                   <View style={styles.notaAlcaldiaBox}>
                     <View style={styles.notaAlcaldiaHeader}>

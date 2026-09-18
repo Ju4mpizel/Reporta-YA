@@ -16,6 +16,7 @@ import {
   AlertCircle,
   Building2,
   SlidersHorizontal,
+  ShieldCheck,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../services/supabase";
@@ -28,8 +29,8 @@ export default function AdminPanelScreen({ navigation }) {
   const [refrescando, setRefrescando] = useState(false);
 
   const [zonaFiltro] = useState("Cala Cala");
-  const [calleFiltro] = useState("Todas");
-  const [categoriaFiltro] = useState("Todas");
+  const [calleFiltro, setCalleFiltro] = useState("Todas");
+  const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
 
   useFocusEffect(
     useCallback(() => {
@@ -81,6 +82,15 @@ export default function AdminPanelScreen({ navigation }) {
     }
   }
 
+  // Filtrado reactivo en memoria
+  const incidentesFiltrados = incidentes.filter((item) => {
+    const coincideCalle =
+      calleFiltro === "Todas" || item.calle_nombre === calleFiltro;
+    const coincideCat =
+      categoriaFiltro === "Todas" || item.categoria_nombre === categoriaFiltro;
+    return coincideCalle && coincideCat;
+  });
+
   const nuevos = incidentes.filter((i) => i.estado === "en_revision").length;
   const enCurso = incidentes.filter(
     (i) => i.estado === "realizando_trabajos",
@@ -129,13 +139,18 @@ export default function AdminPanelScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header idéntico a IncidenteScreen */}
-      <View style={styles.header}>
-        <Text style={styles.headerSub}>ALCALDÍA COCHABAMBA · DISTRITO 12</Text>
+      {/* Header Institucional Oscuro */}
+      <View style={styles.headerDark}>
+        <View style={styles.headerTopLine}>
+          <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
+          <Text style={styles.headerSub}>
+            SUBALCALDÍA CALA CALA · DISTRITO 12
+          </Text>
+        </View>
         <Text style={styles.headerTitle}>Bandeja de Incidentes</Text>
       </View>
 
-      {/* Resumen Operativo Moderno */}
+      {/* Resumen Operativo */}
       <View style={styles.statsContainer}>
         <View style={styles.statBox}>
           <Text style={[styles.statNum, { color: COLORS.amber }]}>
@@ -157,14 +172,14 @@ export default function AdminPanelScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Filtros Acordeón */}
+      {/* Filtros Acordeón Interactivos */}
       <FiltrosAcordeon
         zonaSeleccionada={zonaFiltro}
         calleSeleccionada={calleFiltro}
         categoriaSeleccionada={categoriaFiltro}
         onPressZona={() => {}}
-        onPressCalle={() => {}}
-        onPressCategoria={() => {}}
+        onPressCalle={(calle) => setCalleFiltro(calle)}
+        onPressCategoria={(cat) => setCategoriaFiltro(cat)}
       />
 
       <View style={styles.listHeaderRow}>
@@ -178,7 +193,7 @@ export default function AdminPanelScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={incidentes}
+          data={incidentesFiltrados}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
@@ -215,7 +230,6 @@ export default function AdminPanelScreen({ navigation }) {
                 <Text style={styles.cardTitle}>{item.titulo}</Text>
                 <Text style={styles.cardDesc}>{item.descripcion}</Text>
 
-                {/* Unidad Asignada */}
                 <View style={styles.dptoContainer}>
                   <Building2
                     size={12}
@@ -235,7 +249,6 @@ export default function AdminPanelScreen({ navigation }) {
                   </Text>
                 </View>
 
-                {/* Botón de Asignación / Dictamen */}
                 <TouchableOpacity
                   style={styles.btnAction}
                   activeOpacity={0.8}
@@ -265,28 +278,31 @@ export default function AdminPanelScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    backgroundColor: COLORS.surface,
+  headerDark: {
+    backgroundColor: "#0F172A",
     paddingHorizontal: SPACING.lg,
-    paddingTop: 50,
+    paddingTop: 52,
     paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
+  },
+  headerTopLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
   },
   headerSub: {
     fontSize: 10,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: "#38BDF8",
     letterSpacing: 1,
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    marginTop: 2,
+    fontWeight: "900",
+    color: "#FFFFFF",
   },
-
-  /* Tarjetas de métricas modernas */
   statsContainer: {
     flexDirection: "row",
     gap: SPACING.sm,
@@ -312,7 +328,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: "uppercase",
   },
-
   listHeaderRow: {
     paddingHorizontal: SPACING.lg,
     marginTop: SPACING.sm,
@@ -324,7 +339,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     letterSpacing: 0.5,
   },
-
   centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: {
     marginTop: 10,
@@ -332,13 +346,10 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontWeight: "600",
   },
-
   listContent: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.bottomInset,
   },
-
-  /* Card unificada con IncidenteScreen */
   card: {
     backgroundColor: COLORS.surface,
     padding: SPACING.lg,
@@ -387,7 +398,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: SPACING.sm,
   },
-
   dptoContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -403,7 +413,6 @@ const styles = StyleSheet.create({
   dptoText: { fontSize: 11, color: COLORS.textMuted },
   dptoName: { fontWeight: "800", color: COLORS.textDark },
   dptoNone: { fontStyle: "italic", color: COLORS.textMuted },
-
   btnAction: {
     backgroundColor: COLORS.primaryDark,
     flexDirection: "row",
