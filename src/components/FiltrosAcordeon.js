@@ -25,7 +25,7 @@ export default function FiltrosAcordeon({
   onPressCalle,
   onPressCategoria,
 }) {
-  const [desplegado, setDesplegado] = useState(null); // 'calle' | 'categoria' | null
+  const [desplegado, setDesplegado] = useState(null);
   const [calles, setCalles] = useState([]);
   const [categorias, setCategorias] = useState([]);
 
@@ -57,11 +57,11 @@ export default function FiltrosAcordeon({
   return (
     <View style={styles.container}>
       <View style={styles.bar}>
-        {/* Filtro Zona (Informativo fijo) */}
+        {/* Filtro Zona Fijo */}
         <View style={[styles.filterBox, styles.filterBoxDisabled]}>
           <View style={styles.content}>
             <View style={styles.labelRow}>
-              <MapPin size={10} color={COLORS.textMuted} strokeWidth={2.4} />
+              <MapPin size={10} color={COLORS.primary} strokeWidth={2.4} />
               <Text style={styles.label}>Zona</Text>
             </View>
             <Text style={styles.value} numberOfLines={1}>
@@ -70,7 +70,7 @@ export default function FiltrosAcordeon({
           </View>
         </View>
 
-        {/* Filtro Calle (Desplegable) */}
+        {/* Filtro Calle */}
         <TouchableOpacity
           activeOpacity={0.7}
           style={[
@@ -101,7 +101,7 @@ export default function FiltrosAcordeon({
           )}
         </TouchableOpacity>
 
-        {/* Filtro Categoría (Desplegable) */}
+        {/* Filtro Categoría */}
         <TouchableOpacity
           activeOpacity={0.7}
           style={[
@@ -133,7 +133,7 @@ export default function FiltrosAcordeon({
         </TouchableOpacity>
       </View>
 
-      {/* Panel Desplegable de Chips */}
+      {/* Desplegable de Chips */}
       {desplegado && (
         <View style={styles.dropdown}>
           <ScrollView
@@ -141,7 +141,6 @@ export default function FiltrosAcordeon({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.dropdownScroll}
           >
-            {/* Opción 'Todas' */}
             <TouchableOpacity
               activeOpacity={0.7}
               style={[
@@ -172,7 +171,6 @@ export default function FiltrosAcordeon({
               </Text>
             </TouchableOpacity>
 
-            {/* Listado dinámico */}
             {(desplegado === "calle" ? calles : categorias).map((item) => {
               const seleccionado =
                 desplegado === "calle"
@@ -230,10 +228,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    borderRadius: RADIUS.md,
+    paddingHorizontal: 9,
+    paddingVertical: 7,
     backgroundColor: COLORS.surface,
+    elevation: 1,
   },
   filterBoxActive: {
     borderColor: COLORS.primary,
@@ -267,10 +266,11 @@ const styles = StyleSheet.create({
   dropdown: {
     marginTop: 6,
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
-    paddingVertical: 7,
+    paddingVertical: 8,
+    elevation: 3,
   },
   dropdownScroll: {
     paddingHorizontal: 8,
@@ -281,15 +281,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 4,
     backgroundColor: "#F1F5F9",
-    paddingHorizontal: 10,
+    paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
   },
   chipActive: {
     backgroundColor: COLORS.primaryDark,
+    borderColor: COLORS.primaryDark,
   },
   chipText: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: "700",
     color: COLORS.textDark,
   },

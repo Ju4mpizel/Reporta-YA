@@ -31,18 +31,21 @@ export default function LoginScreen({ navigation }) {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 450,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 450,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
     ]).start();
   }, []);
 
   const handlePressIn = () => {
-    Animated.spring(scaleBtn, { toValue: 0.96, useNativeDriver: true }).start();
+    Animated.spring(scaleBtn, {
+      toValue: 0.96,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
   };
 
   const handlePressOut = () => {
@@ -50,7 +53,7 @@ export default function LoginScreen({ navigation }) {
       toValue: 1,
       friction: 4,
       tension: 40,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
   };
 
@@ -84,16 +87,19 @@ export default function LoginScreen({ navigation }) {
         >
           <View style={styles.brandContainer}>
             <View style={styles.iconCircle}>
-              <ShieldCheck size={36} color={COLORS.primary} strokeWidth={2.4} />
+              <ShieldCheck size={36} color="#0284C7" strokeWidth={2.4} />
             </View>
             <Text style={styles.brandTitle}>Reporta YA!</Text>
-            <Text style={styles.brandSubtitle}>Cala Cala · Cochabamba</Text>
+            <Text style={styles.brandSubtitle}>
+              SUBALCALDÍA CALA CALA · DISTRITO 12
+            </Text>
           </View>
 
           <View style={styles.formContainer}>
-            <Text style={styles.formTitle}>Ingreso al Sistema</Text>
+            <Text style={styles.formTitle}>Ingreso Ciudadano</Text>
             <Text style={styles.formDesc}>
-              Accede con tu documento de identidad y contraseña
+              Accede con tu Cédula de Identidad para gestionar o apoyar
+              incidentes
             </Text>
 
             <View style={styles.inputGroup}>
@@ -152,7 +158,7 @@ export default function LoginScreen({ navigation }) {
                       color={COLORS.textWhite}
                       strokeWidth={2.4}
                     />
-                    <Text style={styles.btnSubmitText}>Iniciar Sesión</Text>
+                    <Text style={styles.btnSubmitText}>Ingresar al Portal</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -185,36 +191,44 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: SPACING.xl,
     elevation: 4,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   brandContainer: { alignItems: "center", marginBottom: SPACING.lg },
   iconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: COLORS.primaryLight,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: SPACING.xs,
   },
-  brandTitle: { fontSize: 22, fontWeight: "900", color: COLORS.textDark },
+  brandTitle: { fontSize: 24, fontWeight: "900", color: COLORS.textDark },
   brandSubtitle: {
     fontSize: 10,
     fontWeight: "800",
     color: COLORS.primary,
     letterSpacing: 1,
+    marginTop: 2,
   },
   formContainer: { marginTop: SPACING.xs },
-  formTitle: { fontSize: 16, fontWeight: "800", color: COLORS.textDark },
+  formTitle: { fontSize: 17, fontWeight: "800", color: COLORS.textDark },
   formDesc: {
     fontSize: 12,
     color: COLORS.textMuted,
     marginBottom: SPACING.lg,
     marginTop: 2,
+    lineHeight: 17,
   },
   inputGroup: { marginBottom: SPACING.md },
   inputLabel: {
@@ -226,17 +240,17 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: "#F8FAFC",
     paddingHorizontal: SPACING.sm,
   },
   inputIcon: { marginRight: 6 },
   input: { flex: 1, paddingVertical: 10, fontSize: 13, color: COLORS.textDark },
   btnSubmit: {
-    backgroundColor: COLORS.textDark,
-    paddingVertical: 13,
+    backgroundColor: COLORS.primaryDark,
+    paddingVertical: 14,
     borderRadius: RADIUS.sm,
     alignItems: "center",
     marginTop: SPACING.sm,
@@ -254,7 +268,7 @@ const styles = StyleSheet.create({
   linkText: { fontSize: 12, color: COLORS.textMuted },
   linkBold: {
     fontWeight: "800",
-    color: COLORS.textDark,
+    color: COLORS.primary,
     textDecorationLine: "underline",
   },
 });

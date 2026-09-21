@@ -1,5 +1,5 @@
 // src/screens/PerfilScreen.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Animated,
+  Platform,
 } from "react-native";
 import {
   User,
@@ -17,6 +19,11 @@ import {
   LogOut,
   FileText,
   AlertCircle,
+  ShieldCheck,
+  Award,
+  ChevronRight,
+  Clock,
+  CheckCircle2,
 } from "lucide-react-native";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
@@ -33,6 +40,24 @@ export default function PerfilScreen() {
   const [cargando, setCargando] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
 
+  const animFade = useRef(new Animated.Value(0)).current;
+  const animSlide = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(animFade, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.timing(animSlide, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: Platform.OS !== "web",
+      }),
+    ]).start();
+  }, []);
+
   useEffect(() => {
     if (perfil?.id) {
       cargarIncidentesUsuario();
@@ -44,7 +69,6 @@ export default function PerfilScreen() {
   async function cargarIncidentesUsuario() {
     try {
       setCargando(true);
-
       const { data: incidentesData, error: incError } = await supabase
         .from("incidentes")
         .select(
@@ -87,153 +111,210 @@ export default function PerfilScreen() {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Cargando perfil...</Text>
+        <Text style={styles.loadingText}>Cargando perfil ciudadano...</Text>
       </View>
     );
   }
 
   return (
     <View style={styles.screenWrapper}>
+      {/* Header Institucional Curvo */}
+      <View style={styles.headerDark}>
+        <View style={styles.headerTopLine}>
+          <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
+          <Text style={styles.headerSub}>SUBALCALDÍA CALA CALA · D-12</Text>
+        </View>
+        <Text style={styles.headerTitle}>Credencial Ciudadana</Text>
+      </View>
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Text style={styles.headerSub}>CALA CALA · DISTRITO 12</Text>
-          <Text style={styles.headerTitle}>Mi Perfil Ciudadano</Text>
-        </View>
-
-        <View style={styles.identityCard}>
-          <View style={styles.avatarCircle}>
-            <User size={36} color={COLORS.textDark} strokeWidth={2} />
-          </View>
-          <Text style={styles.userName}>
-            {perfil?.nombre_completo || "Ciudadano"}
-          </Text>
-          <View style={styles.badgesRow}>
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>
-                {(
-                  perfil?.roles?.nombre ||
-                  perfil?.rol_id ||
-                  "Ciudadano"
-                ).toUpperCase()}
-              </Text>
+        <Animated.View
+          style={{
+            opacity: animFade,
+            transform: [{ translateY: animSlide }],
+          }}
+        >
+          {/* Tarjeta de Identidad Ciudadana Estilizada */}
+          <View style={styles.identityCard}>
+            <View style={styles.avatarWrap}>
+              <View style={styles.avatarCircle}>
+                <User size={38} color="#FFFFFF" strokeWidth={2.2} />
+              </View>
+              <View style={styles.activeBadge}>
+                <ShieldCheck size={11} color="#FFFFFF" strokeWidth={2.5} />
+              </View>
             </View>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusText}>
-                {perfil?.activo ? "ACTIVO" : "INACTIVO"}
-              </Text>
-            </View>
-          </View>
-        </View>
 
-        <View style={styles.infoCard}>
-          <Text style={styles.cardSectionTitle}>DATOS DE LA CUENTA</Text>
-
-          <View style={styles.infoRow}>
-            <View style={styles.iconLabel}>
-              <FileText size={15} color={COLORS.textMuted} />
-              <Text style={styles.labelText}>Carnet de Identidad (CI)</Text>
-            </View>
-            <Text style={styles.valueText}>
-              {perfil?.ci || "No registrado"}
+            <Text style={styles.userName}>
+              {perfil?.nombre_completo || "Vecino Registrado"}
             </Text>
-          </View>
-
-          <View style={styles.infoRow}>
-            <View style={styles.iconLabel}>
-              <Phone size={15} color={COLORS.textMuted} />
-              <Text style={styles.labelText}>Teléfono / Celular</Text>
-            </View>
-            <Text style={styles.valueText}>
-              {perfil?.telefono || "No registrado"}
+            <Text style={styles.userJurisdiccion}>
+              Distrito Municipal 12 · Cala Cala
             </Text>
-          </View>
 
-          <View style={styles.infoRow}>
-            <View style={styles.iconLabel}>
-              <MapPin size={15} color={COLORS.textMuted} />
-              <Text style={styles.labelText}>Jurisdicción</Text>
-            </View>
-            <Text style={styles.valueText}>Cala Cala (D-12)</Text>
-          </View>
-
-          <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-            <View style={styles.iconLabel}>
-              <Calendar size={15} color={COLORS.textMuted} />
-              <Text style={styles.labelText}>Miembro desde</Text>
-            </View>
-            <Text style={styles.valueText}>
-              {perfil?.created_at
-                ? new Date(perfil.created_at).toLocaleDateString()
-                : "Septiembre 2026"}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Text style={styles.statNum}>{metricas.total}</Text>
-            <Text style={styles.statLabel}>Registrados</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={[styles.statNum, { color: COLORS.amber }]}>
-              {metricas.enProceso}
-            </Text>
-            <Text style={styles.statLabel}>En Proceso</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={[styles.statNum, { color: COLORS.green }]}>
-              {metricas.resueltos}
-            </Text>
-            <Text style={styles.statLabel}>Resueltos</Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionHeader}>MIS REPORTES RECIENTES</Text>
-        {misIncidentes.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>
-              Aún no has registrado ningún reporte.
-            </Text>
-          </View>
-        ) : (
-          misIncidentes.slice(0, 3).map((item) => (
-            <View key={item.id} style={styles.historyCard}>
-              <View style={styles.historyTop}>
-                <Text style={styles.historyStreet}>
-                  {item.calles?.nombre || "Vía urbana"}
-                </Text>
-                <Text style={styles.historyBadge}>
-                  {item.estado === "hecho"
-                    ? "RESUELTO"
-                    : item.estado === "realizando_trabajos"
-                      ? "EN TRABAJOS"
-                      : "EN REVISIÓN"}
+            <View style={styles.badgesRow}>
+              <View style={styles.roleBadge}>
+                <Award size={12} color="#0284C7" strokeWidth={2.4} />
+                <Text style={styles.roleText}>
+                  {(
+                    perfil?.roles?.nombre ||
+                    perfil?.rol_id ||
+                    "Ciudadano"
+                  ).toUpperCase()}
                 </Text>
               </View>
-              <Text style={styles.historyTitle}>{item.titulo}</Text>
-              <Text style={styles.historyDate}>
-                Reportado el {new Date(item.created_at).toLocaleDateString()}
+              <View style={styles.statusBadge}>
+                <View style={styles.statusDot} />
+                <Text style={styles.statusText}>
+                  {perfil?.activo ? "ACTIVO" : "INACTIVO"}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Tarjeta de Métricas Territoriales */}
+          <View style={styles.statsContainer}>
+            <View style={styles.statBox}>
+              <Text style={styles.statNum}>{metricas.total}</Text>
+              <Text style={styles.statLabel}>Reportados</Text>
+            </View>
+            <View style={[styles.statBox, styles.statBoxActive]}>
+              <Text style={[styles.statNum, { color: COLORS.amber }]}>
+                {metricas.enProceso}
+              </Text>
+              <Text style={styles.statLabel}>En Proceso</Text>
+            </View>
+            <View style={[styles.statBox, styles.statBoxDone]}>
+              <Text style={[styles.statNum, { color: "#059669" }]}>
+                {metricas.resueltos}
+              </Text>
+              <Text style={styles.statLabel}>Resueltos</Text>
+            </View>
+          </View>
+
+          {/* Tarjeta de Información de la Cuenta */}
+          <View style={styles.infoCard}>
+            <Text style={styles.cardSectionTitle}>DATOS DEL REGISTRO</Text>
+
+            <View style={styles.infoRow}>
+              <View style={styles.iconLabel}>
+                <View style={styles.iconWrapMini}>
+                  <FileText size={14} color="#0284C7" />
+                </View>
+                <Text style={styles.labelText}>Cédula de Identidad</Text>
+              </View>
+              <Text style={styles.valueText}>{perfil?.ci || "Sin CI"}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.iconLabel}>
+                <View style={styles.iconWrapMini}>
+                  <Phone size={14} color="#0284C7" />
+                </View>
+                <Text style={styles.labelText}>Teléfono de Contacto</Text>
+              </View>
+              <Text style={styles.valueText}>
+                {perfil?.telefono || "No asignado"}
               </Text>
             </View>
-          ))
-        )}
 
-        {/* Botón de Cerrar Sesión */}
-        <TouchableOpacity
-          style={styles.btnLogout}
-          activeOpacity={0.7}
-          onPress={() => setModalVisible(true)}
-        >
-          <LogOut size={16} color="#DC2626" strokeWidth={2.2} />
-          <Text style={styles.btnLogoutText}>Cerrar Sesión</Text>
-        </TouchableOpacity>
+            <View style={styles.infoRow}>
+              <View style={styles.iconLabel}>
+                <View style={styles.iconWrapMini}>
+                  <MapPin size={14} color="#0284C7" />
+                </View>
+                <Text style={styles.labelText}>Jurisdicción Asignada</Text>
+              </View>
+              <Text style={styles.valueText}>Cochabamba - D12</Text>
+            </View>
+
+            <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
+              <View style={styles.iconLabel}>
+                <View style={styles.iconWrapMini}>
+                  <Calendar size={14} color="#0284C7" />
+                </View>
+                <Text style={styles.labelText}>Fecha de Alta</Text>
+              </View>
+              <Text style={styles.valueText}>
+                {perfil?.created_at
+                  ? new Date(perfil.created_at).toLocaleDateString()
+                  : "2026"}
+              </Text>
+            </View>
+          </View>
+
+          {/* Historial Reciente */}
+          <Text style={styles.sectionHeader}>HISTORIAL RECIENTE</Text>
+          {misIncidentes.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <AlertCircle size={24} color={COLORS.textSubtle} />
+              <Text style={styles.emptyText}>
+                No tienes incidencias registradas en la zona.
+              </Text>
+            </View>
+          ) : (
+            misIncidentes.slice(0, 3).map((item) => (
+              <View key={item.id} style={styles.historyCard}>
+                <View style={styles.historyTop}>
+                  <Text style={styles.historyStreet}>
+                    {item.calles?.nombre || "Vía de Cala Cala"}
+                  </Text>
+                  <View
+                    style={[
+                      styles.historyBadgeWrap,
+                      item.estado === "hecho"
+                        ? { backgroundColor: "#DCFCE7" }
+                        : item.estado === "realizando_trabajos"
+                          ? { backgroundColor: "#DBEAFE" }
+                          : { backgroundColor: "#FEF3C7" },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.historyBadgeText,
+                        item.estado === "hecho"
+                          ? { color: "#15803D" }
+                          : item.estado === "realizando_trabajos"
+                            ? { color: "#1D4ED8" }
+                            : { color: "#B45309" },
+                      ]}
+                    >
+                      {item.estado === "hecho"
+                        ? "RESUELTO"
+                        : item.estado === "realizando_trabajos"
+                          ? "EN TRABAJOS"
+                          : "EN REVISIÓN"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.historyTitle}>{item.titulo}</Text>
+                <View style={styles.historyFooter}>
+                  <Clock size={11} color={COLORS.textSubtle} />
+                  <Text style={styles.historyDate}>
+                    {new Date(item.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+            ))
+          )}
+
+          {/* Botón de Logout Institucional */}
+          <TouchableOpacity
+            style={styles.btnLogout}
+            activeOpacity={0.8}
+            onPress={() => setModalVisible(true)}
+          >
+            <LogOut size={16} color="#EF4444" strokeWidth={2.4} />
+            <Text style={styles.btnLogoutText}>Cerrar Sesión Activa</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
 
-      {/* Modal / Bottom Sheet Moderno de Confirmación */}
+      {/* Modal / Bottom Sheet */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -251,10 +332,10 @@ export default function PerfilScreen() {
             <View style={styles.modalIconWrap}>
               <AlertCircle size={28} color="#DC2626" strokeWidth={2.4} />
             </View>
-            <Text style={styles.modalTitle}>¿Cerrar Sesión?</Text>
+            <Text style={styles.modalTitle}>¿Deseas cerrar tu sesión?</Text>
             <Text style={styles.modalDesc}>
-              Tendrás que volver a ingresar tu carnet y contraseña para realizar
-              o apoyar incidentes.
+              Deberás volver a ingresar tu CI y clave de acceso para respaldar o
+              reportar nuevos problemas vecinales.
             </Text>
 
             <View style={styles.modalActions}>
@@ -271,7 +352,7 @@ export default function PerfilScreen() {
                 activeOpacity={0.8}
                 onPress={confirmarLogout}
               >
-                <Text style={styles.btnModalConfirmText}>Sí, Salir</Text>
+                <Text style={styles.btnModalConfirmText}>Cerrar Sesión</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -283,23 +364,36 @@ export default function PerfilScreen() {
 
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1, backgroundColor: COLORS.background },
-  container: { flex: 1 },
-  content: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.bottomInset,
+  headerDark: {
+    backgroundColor: "#0F172A",
+    paddingHorizontal: SPACING.lg,
+    paddingTop: 52,
+    paddingBottom: SPACING.lg,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
+    elevation: 3,
   },
-  header: { paddingTop: 40, marginBottom: SPACING.md },
+  headerTopLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
   headerSub: {
     fontSize: 10,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: "#38BDF8",
     letterSpacing: 1,
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    marginTop: 2,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  container: { flex: 1 },
+  content: {
+    padding: SPACING.lg,
+    paddingBottom: SPACING.bottomInset || 24,
   },
   centerContainer: {
     flex: 1,
@@ -308,115 +402,186 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   loadingText: { marginTop: 10, fontSize: 12, color: COLORS.textMuted },
+
+  /* Tarjeta de Identidad */
   identityCard: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
-    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.lg,
     padding: SPACING.lg,
     alignItems: "center",
     marginBottom: SPACING.md,
+    elevation: 2,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-  avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
-    backgroundColor: COLORS.surfaceMuted,
-    justifyContent: "center",
-    alignItems: "center",
+  avatarWrap: {
+    position: "relative",
     marginBottom: SPACING.sm,
   },
+  avatarCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "#0F172A",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#38BDF8",
+  },
+  activeBadge: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "#16A34A",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
   userName: {
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: 17,
+    fontWeight: "900",
     color: COLORS.textDark,
-    marginBottom: 6,
+    marginBottom: 2,
   },
-  badgesRow: { flexDirection: "row", gap: SPACING.xs },
+  userJurisdiccion: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    fontWeight: "600",
+    marginBottom: 10,
+  },
+  badgesRow: { flexDirection: "row", gap: 8 },
   roleBadge: {
-    backgroundColor: COLORS.textDark,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.sm,
-  },
-  roleText: { color: COLORS.textWhite, fontSize: 9, fontWeight: "800" },
-  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#E0F2FE",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.pill,
     borderWidth: 1,
-    borderColor: COLORS.textDark,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.surface,
+    borderColor: "#BAE6FD",
   },
-  statusText: { color: COLORS.textDark, fontSize: 9, fontWeight: "800" },
+  roleText: { color: "#0369A1", fontSize: 9.5, fontWeight: "800" },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#F0FDF4",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.pill,
+    borderWidth: 1,
+    borderColor: "#BBF7D0",
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#16A34A",
+  },
+  statusText: { color: "#15803D", fontSize: 9.5, fontWeight: "800" },
+
+  /* Métricas */
+  statsContainer: {
+    flexDirection: "row",
+    gap: SPACING.sm,
+    marginBottom: SPACING.md,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    paddingVertical: 12,
+    alignItems: "center",
+    elevation: 1,
+  },
+  statBoxActive: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FDE68A",
+  },
+  statBoxDone: {
+    backgroundColor: "#ECFDF5",
+    borderColor: "#A7F3D0",
+  },
+  statNum: { fontSize: 20, fontWeight: "900", color: COLORS.textDark },
+  statLabel: {
+    fontSize: 9.5,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+    marginTop: 2,
+    textTransform: "uppercase",
+  },
+
+  /* Card Info */
   infoCard: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
-    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
+    elevation: 1,
   },
   cardSectionTitle: {
     fontSize: 10,
     fontWeight: "800",
     color: COLORS.textMuted,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: SPACING.sm,
   },
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.borderLight,
   },
-  iconLabel: { flexDirection: "row", alignItems: "center", gap: 6 },
-  labelText: { fontSize: 11, fontWeight: "600", color: COLORS.textMuted },
-  valueText: { fontSize: 12, fontWeight: "700", color: COLORS.textDark },
-  statsContainer: {
-    flexDirection: "row",
-    gap: SPACING.xs,
-    marginBottom: SPACING.md,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
-    borderRadius: RADIUS.sm,
-    paddingVertical: 10,
+  iconLabel: { flexDirection: "row", alignItems: "center", gap: 8 },
+  iconWrapMini: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    backgroundColor: "#F0F9FF",
     alignItems: "center",
+    justifyContent: "center",
   },
-  statNum: { fontSize: 18, fontWeight: "800", color: COLORS.textDark },
-  statLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: COLORS.textMuted,
-    marginTop: 2,
-  },
+  labelText: { fontSize: 11.5, fontWeight: "600", color: COLORS.textMuted },
+  valueText: { fontSize: 12, fontWeight: "800", color: COLORS.textDark },
+
+  /* Historial */
   sectionHeader: {
     fontSize: 10,
     fontWeight: "800",
     color: COLORS.textMuted,
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     marginBottom: SPACING.xs,
+    marginLeft: 4,
   },
   historyCard: {
     backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
-    borderRadius: RADIUS.sm,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
     padding: SPACING.md,
     marginBottom: SPACING.xs,
+    elevation: 1,
   },
   historyTop: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 3,
+    alignItems: "center",
+    marginBottom: 4,
   },
   historyStreet: {
     fontSize: 10,
@@ -424,41 +589,56 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     textTransform: "uppercase",
   },
-  historyBadge: { fontSize: 9, fontWeight: "800", color: COLORS.textDark },
-  historyTitle: { fontSize: 13, fontWeight: "700", color: COLORS.textDark },
-  historyDate: { fontSize: 10, color: COLORS.textSubtle, marginTop: 4 },
+  historyBadgeWrap: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  historyBadgeText: { fontSize: 8.5, fontWeight: "800" },
+  historyTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: COLORS.textDark,
+    marginBottom: 4,
+  },
+  historyFooter: { flexDirection: "row", alignItems: "center", gap: 4 },
+  historyDate: { fontSize: 10, color: COLORS.textSubtle },
+
   emptyCard: {
     padding: SPACING.lg,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
     alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
     marginBottom: SPACING.md,
   },
-  emptyText: { fontSize: 12, color: COLORS.textMuted },
+  emptyText: { fontSize: 11, color: COLORS.textMuted, fontWeight: "600" },
 
   btnLogout: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    backgroundColor: "#FEE2E2",
-    borderWidth: 1.5,
-    borderColor: "#EF4444",
-    borderRadius: RADIUS.sm,
+    backgroundColor: "#FEF2F2",
+    borderWidth: 1,
+    borderColor: "#FECACA",
+    borderRadius: RADIUS.md,
     paddingVertical: 13,
     marginTop: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
   btnLogoutText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: "800",
     color: "#DC2626",
     textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
 
-  /* Modal Bottom Sheet */
+  /* Modal */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.6)",
@@ -470,8 +650,8 @@ const styles = StyleSheet.create({
     borderTopRightRadius: RADIUS.xl,
     padding: SPACING.xl,
     alignItems: "center",
-    borderTopWidth: 2,
-    borderColor: COLORS.textDark,
+    borderTopWidth: 1,
+    borderColor: COLORS.borderLight,
   },
   modalDragHandle: {
     width: 36,
@@ -512,7 +692,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: RADIUS.sm,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: "center",
     backgroundColor: "#F8FAFC",

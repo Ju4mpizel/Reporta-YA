@@ -41,18 +41,21 @@ export default function RegistroScreen({ navigation }) {
       Animated.timing(fadeAnim, {
         toValue: 1,
         duration: 450,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 450,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
     ]).start();
   }, []);
 
   const handlePressIn = () => {
-    Animated.spring(scaleBtn, { toValue: 0.96, useNativeDriver: true }).start();
+    Animated.spring(scaleBtn, {
+      toValue: 0.96,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
   };
 
   const handlePressOut = () => {
@@ -60,7 +63,7 @@ export default function RegistroScreen({ navigation }) {
       toValue: 1,
       friction: 4,
       tension: 40,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
   };
 
@@ -72,7 +75,7 @@ export default function RegistroScreen({ navigation }) {
       !password.trim()
     ) {
       Alert.alert(
-        "Campos incompletos",
+        "Campos requeridos",
         "Por favor completa todos los campos del formulario.",
       );
       return;
@@ -112,13 +115,13 @@ export default function RegistroScreen({ navigation }) {
             onPress={() => navigation.goBack()}
             activeOpacity={0.7}
           >
-            <ArrowLeft size={16} color={COLORS.textDark} />
-            <Text style={styles.btnBackText}>Volver</Text>
+            <ArrowLeft size={16} color={COLORS.primary} />
+            <Text style={styles.btnBackText}>Volver al Acceso</Text>
           </TouchableOpacity>
 
-          <Text style={styles.formTitle}>Registro de Vecino</Text>
+          <Text style={styles.formTitle}>Registro Ciudadano</Text>
           <Text style={styles.formDesc}>
-            Completa tus datos para crear tu cuenta en Cala Cala
+            Empadronamiento digital para el Distrito 12 (Cala Cala)
           </Text>
 
           <View style={styles.inputGroup}>
@@ -214,7 +217,7 @@ export default function RegistroScreen({ navigation }) {
                     color={COLORS.textWhite}
                     strokeWidth={2.4}
                   />
-                  <Text style={styles.btnSubmitText}>Registrar Cuenta</Text>
+                  <Text style={styles.btnSubmitText}>Crear mi Cuenta</Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -235,11 +238,15 @@ const styles = StyleSheet.create({
   },
   cardWrapper: {
     backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.lg,
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: SPACING.xl,
     elevation: 4,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
   btnBack: {
     flexDirection: "row",
@@ -248,10 +255,10 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     alignSelf: "flex-start",
   },
-  btnBackText: { fontSize: 12, fontWeight: "700", color: COLORS.textDark },
+  btnBackText: { fontSize: 12, fontWeight: "700", color: COLORS.primary },
   formTitle: { fontSize: 20, fontWeight: "900", color: COLORS.textDark },
   formDesc: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: COLORS.textMuted,
     marginBottom: SPACING.lg,
     marginTop: 2,
@@ -266,16 +273,16 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    borderWidth: 1.5,
-    borderColor: COLORS.textDark,
-    borderRadius: RADIUS.sm,
-    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: "#F8FAFC",
     paddingHorizontal: SPACING.sm,
   },
   inputIcon: { marginRight: 6 },
   input: { flex: 1, paddingVertical: 9, fontSize: 13, color: COLORS.textDark },
   btnSubmit: {
-    backgroundColor: COLORS.textDark,
+    backgroundColor: COLORS.primaryDark,
     paddingVertical: 13,
     borderRadius: RADIUS.sm,
     alignItems: "center",

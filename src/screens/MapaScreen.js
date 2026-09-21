@@ -1,5 +1,5 @@
 // src/screens/MapaScreen.js
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   ScrollView,
   Linking,
+  Animated,
+  Platform,
 } from "react-native";
 import {
   MapPin,
@@ -18,13 +20,13 @@ import {
   List,
   Check,
   ChevronRight,
+  ShieldCheck,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { incidentesService } from "../services/incidentesService";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
 
 export default function MapaScreen({ route, navigation }) {
-  // <-- route agregado
   const [incidentes, setIncidentes] = useState([]);
   const [incidenteActivo, setIncidenteActivo] = useState(null);
   const [cargando, setCargando] = useState(true);
@@ -38,7 +40,6 @@ export default function MapaScreen({ route, navigation }) {
     }, []),
   );
 
-  // PATRÓN OBSERVER: Recarga reactiva en vivo
   useEffect(() => {
     const desuscribir = incidentesService.suscribirACambios(() => {
       cargarIncidentes();
@@ -49,7 +50,6 @@ export default function MapaScreen({ route, navigation }) {
     };
   }, []);
 
-  // Sincroniza si venimos desde IncidenteScreen con un id específico
   useEffect(() => {
     if (incidenteIdParam && incidentes.length > 0) {
       const objetivo = incidentes.find(
@@ -118,16 +118,16 @@ export default function MapaScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Cabecera Compacta */}
-      <View style={styles.header}>
-        <View style={styles.headerBadge}>
-          <MapPin size={12} color={COLORS.primary} strokeWidth={2.4} />
-          <Text style={styles.headerSub}>CALA CALA · DISTRITO 12</Text>
+      {/* Header Institucional Curvo Homologado */}
+      <View style={styles.headerDark}>
+        <View style={styles.headerTopLine}>
+          <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
+          <Text style={styles.headerSub}>SUBALCALDÍA CALA CALA · D-12</Text>
         </View>
         <Text style={styles.headerTitle}>Mapa Territorial</Text>
       </View>
 
-      {/* Contenedor del Mapa a Pantalla Completa */}
+      {/* Visor */}
       <View style={styles.mapContainer}>
         {cargando ? (
           <View style={styles.centerBox}>
@@ -193,7 +193,6 @@ export default function MapaScreen({ route, navigation }) {
               </View>
             </TouchableOpacity>
 
-            {/* Lista Desplegable con Scroll Vertical */}
             {menuAbierto && (
               <View style={styles.accordionBody}>
                 <ScrollView
@@ -257,7 +256,7 @@ export default function MapaScreen({ route, navigation }) {
               </View>
             )}
 
-            {/* Barra de Acciones Directas */}
+            {/* Barra de Acciones */}
             <View style={styles.cardActionsRow}>
               <TouchableOpacity
                 style={styles.btnAppMaps}
@@ -292,31 +291,32 @@ export default function MapaScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    backgroundColor: COLORS.surface,
+  headerDark: {
+    backgroundColor: "#0F172A",
     paddingHorizontal: SPACING.lg,
-    paddingTop: 48,
-    paddingBottom: SPACING.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingTop: 52,
+    paddingBottom: SPACING.md,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
+    elevation: 3,
   },
-  headerBadge: {
+  headerTopLine: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 6,
+    marginBottom: 4,
   },
   headerSub: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
-    color: COLORS.primary,
-    letterSpacing: 0.8,
+    color: "#38BDF8",
+    letterSpacing: 1,
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.textDark,
+    fontSize: 22,
+    fontWeight: "900",
+    color: "#FFFFFF",
   },
-
   mapContainer: {
     flex: 1,
     position: "relative",
@@ -338,8 +338,6 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     fontWeight: "600",
   },
-
-  /* Mini Acordeón Flotante */
   floatingAccordionContainer: {
     position: "absolute",
     bottom: 12,
@@ -400,8 +398,6 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
     marginLeft: 8,
   },
-
-  /* Scroll list interna del acordeón */
   accordionBody: {
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
@@ -466,8 +462,6 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#FFFFFF",
   },
-
-  /* Barra de acciones inferior */
   cardActionsRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,5 +1,5 @@
 // src/screens/AdminPanelScreen.js
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Animated,
+  Platform,
 } from "react-native";
 import {
   Clock,
@@ -17,11 +19,116 @@ import {
   Building2,
   SlidersHorizontal,
   ShieldCheck,
+  MapPin,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { incidentesService } from "../services/incidentesService";
 import FiltrosAcordeon from "../components/FiltrosAcordeon";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
+
+// Tarjeta animada para cada reporte en bandeja
+function AdminIncidenteCard({ item, index, badge, onDictaminar }) {
+  const animFade = useRef(new Animated.Value(0)).current;
+  const animSlide = useRef(new Animated.Value(16)).current;
+  const animScaleBtn = useRef(new Animated.Value(1)).current;
+
+  const StatusIcon = badge.Icon;
+  const tieneDpto = Boolean(item.departamento_nombre);
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(animFade, {
+        toValue: 1,
+        duration: 300,
+        delay: Math.min(index * 50, 350),
+        useNativeDriver: Platform.OS !== "web",
+      }),
+      Animated.timing(animSlide, {
+        toValue: 0,
+        duration: 300,
+        delay: Math.min(index * 50, 350),
+        useNativeDriver: Platform.OS !== "web",
+      }),
+    ]).start();
+  }, []);
+
+  const handlePressIn = () => {
+    Animated.spring(animScaleBtn, {
+      toValue: 0.95,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(animScaleBtn, {
+      toValue: 1,
+      friction: 4,
+      tension: 160,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  };
+
+  return (
+    <Animated.View
+      style={[
+        styles.card,
+        {
+          opacity: animFade,
+          transform: [{ translateY: animSlide }],
+        },
+      ]}
+    >
+      <View style={styles.cardTop}>
+        <View style={styles.calleRow}>
+          <MapPin size={11} color={COLORS.primary} strokeWidth={2.4} />
+          <Text style={styles.cardCalle} numberOfLines={1}>
+            {item.calle_nombre}
+          </Text>
+        </View>
+        <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+          <StatusIcon size={11} color={badge.text} strokeWidth={2.4} />
+          <Text style={[styles.badgeText, { color: badge.text }]}>
+            {badge.label}
+          </Text>
+        </View>
+      </View>
+
+      <Text style={styles.cardCategoria}>{item.categoria_nombre}</Text>
+      <Text style={styles.cardTitle}>{item.titulo}</Text>
+      <Text style={styles.cardDesc}>{item.descripcion}</Text>
+
+      <View style={styles.dptoContainer}>
+        <Building2
+          size={13}
+          color={tieneDpto ? COLORS.primaryDark : COLORS.textMuted}
+        />
+        <Text style={styles.dptoText}>
+          Unidad Asignada:{" "}
+          {tieneDpto ? (
+            <Text style={styles.dptoName}>{item.departamento_nombre}</Text>
+          ) : (
+            <Text style={styles.dptoNone}>Sin Asignar (Pendiente)</Text>
+          )}
+        </Text>
+      </View>
+
+      <Animated.View style={{ transform: [{ scale: animScaleBtn }] }}>
+        <TouchableOpacity
+          style={styles.btnAction}
+          activeOpacity={0.85}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={() => onDictaminar(item)}
+        >
+          <SlidersHorizontal size={13} color="#FFFFFF" strokeWidth={2.4} />
+          <Text style={styles.btnActionText}>
+            {tieneDpto ? "Modificar Estado / Nota" : "Asignar Departamento"}
+          </Text>
+        </TouchableOpacity>
+      </Animated.View>
+    </Animated.View>
+  );
+}
 
 export default function AdminPanelScreen({ navigation }) {
   const [incidentes, setIncidentes] = useState([]);
@@ -81,22 +188,22 @@ export default function AdminPanelScreen({ navigation }) {
       case "en_revision":
         return {
           label: "En Revisión",
-          bg: COLORS.amberBg,
-          text: COLORS.amber,
+          bg: "#FEF3C7",
+          text: "#B45309",
           Icon: Clock,
         };
       case "realizando_trabajos":
         return {
           label: "En Trabajos",
-          bg: COLORS.blueBg,
-          text: COLORS.blue,
+          bg: "#DBEAFE",
+          text: "#1D4ED8",
           Icon: Wrench,
         };
       case "hecho":
         return {
           label: "Resuelto",
-          bg: COLORS.greenBg,
-          text: COLORS.green,
+          bg: "#DCFCE7",
+          text: "#15803D",
           Icon: CheckCircle2,
         };
       case "rechazado":
@@ -118,6 +225,7 @@ export default function AdminPanelScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      {/* Header Institucional Curvo */}
       <View style={styles.headerDark}>
         <View style={styles.headerTopLine}>
           <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
@@ -128,23 +236,18 @@ export default function AdminPanelScreen({ navigation }) {
         <Text style={styles.headerTitle}>Bandeja de Incidentes</Text>
       </View>
 
+      {/* Métricas Operativas */}
       <View style={styles.statsContainer}>
-        <View style={styles.statBox}>
-          <Text style={[styles.statNum, { color: COLORS.amber }]}>
-            {nuevos}
-          </Text>
+        <View style={[styles.statBox, styles.statBoxAmber]}>
+          <Text style={[styles.statNum, { color: "#D97706" }]}>{nuevos}</Text>
           <Text style={styles.statLabel}>Nuevos</Text>
         </View>
-        <View style={styles.statBox}>
-          <Text style={[styles.statNum, { color: COLORS.blue }]}>
-            {enCurso}
-          </Text>
-          <Text style={styles.statLabel}>En Curso</Text>
+        <View style={[styles.statBox, styles.statBoxBlue]}>
+          <Text style={[styles.statNum, { color: "#2563EB" }]}>{enCurso}</Text>
+          <Text style={styles.statLabel}>En Cuadrilla</Text>
         </View>
-        <View style={styles.statBox}>
-          <Text style={[styles.statNum, { color: COLORS.green }]}>
-            {hechos}
-          </Text>
+        <View style={[styles.statBox, styles.statBoxGreen]}>
+          <Text style={[styles.statNum, { color: "#059669" }]}>{hechos}</Text>
           <Text style={styles.statLabel}>Resueltos</Text>
         </View>
       </View>
@@ -159,13 +262,15 @@ export default function AdminPanelScreen({ navigation }) {
       />
 
       <View style={styles.listHeaderRow}>
-        <Text style={styles.listSubtitle}>REPORTES PENDIENTES DE GESTIÓN</Text>
+        <Text style={styles.listSubtitle}>
+          EXPEDIENTES PENDIENTES DE RESOLUCIÓN
+        </Text>
       </View>
 
       {cargando ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Cargando bandeja de entrada...</Text>
+          <Text style={styles.loadingText}>Sincronizando expedientes...</Text>
         </View>
       ) : (
         <FlatList
@@ -179,71 +284,17 @@ export default function AdminPanelScreen({ navigation }) {
               onRefresh={cargarBandeja}
             />
           }
-          renderItem={({ item }) => {
+          renderItem={({ item, index }) => {
             const badge = getBadge(item.estado);
-            const StatusIcon = badge.Icon;
-            const tieneDpto = Boolean(item.departamento_nombre);
-
             return (
-              <View style={styles.card}>
-                <View style={styles.cardTop}>
-                  <Text style={styles.cardCalle}>{item.calle_nombre}</Text>
-                  <View style={[styles.badge, { backgroundColor: badge.bg }]}>
-                    <StatusIcon
-                      size={11}
-                      color={badge.text}
-                      strokeWidth={2.4}
-                    />
-                    <Text style={[styles.badgeText, { color: badge.text }]}>
-                      {badge.label}
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={styles.cardCategoria}>
-                  {item.categoria_nombre}
-                </Text>
-                <Text style={styles.cardTitle}>{item.titulo}</Text>
-                <Text style={styles.cardDesc}>{item.descripcion}</Text>
-
-                <View style={styles.dptoContainer}>
-                  <Building2
-                    size={12}
-                    color={tieneDpto ? COLORS.textDark : COLORS.textMuted}
-                  />
-                  <Text style={styles.dptoText}>
-                    Unidad:{" "}
-                    {tieneDpto ? (
-                      <Text style={styles.dptoName}>
-                        {item.departamento_nombre}
-                      </Text>
-                    ) : (
-                      <Text style={styles.dptoNone}>
-                        Sin Asignar (Pendiente)
-                      </Text>
-                    )}
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.btnAction}
-                  activeOpacity={0.8}
-                  onPress={() =>
-                    navigation.navigate("GestionIncidente", { incidente: item })
-                  }
-                >
-                  <SlidersHorizontal
-                    size={13}
-                    color="#FFFFFF"
-                    strokeWidth={2.4}
-                  />
-                  <Text style={styles.btnActionText}>
-                    {tieneDpto
-                      ? "Modificar Estado / Nota"
-                      : "Asignar Departamento"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <AdminIncidenteCard
+                item={item}
+                index={index}
+                badge={badge}
+                onDictaminar={(inc) =>
+                  navigation.navigate("GestionIncidente", { incidente: inc })
+                }
+              />
             );
           }}
         />
@@ -261,6 +312,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.md,
     borderBottomLeftRadius: RADIUS.lg,
     borderBottomRightRadius: RADIUS.lg,
+    elevation: 3,
   },
   headerTopLine: {
     flexDirection: "row",
@@ -296,10 +348,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     elevation: 1,
   },
+  statBoxAmber: { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" },
+  statBoxBlue: { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
+  statBoxGreen: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
   statNum: { fontSize: 20, fontWeight: "900" },
   statLabel: {
-    fontSize: 10,
-    fontWeight: "700",
+    fontSize: 9.5,
+    fontWeight: "800",
     color: COLORS.textMuted,
     marginTop: 2,
     textTransform: "uppercase",
@@ -310,10 +365,10 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   listSubtitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "800",
     color: COLORS.textMuted,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: {
@@ -324,7 +379,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.bottomInset,
+    paddingBottom: SPACING.bottomInset || 20,
   },
   card: {
     backgroundColor: COLORS.surface,
@@ -334,12 +389,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     elevation: 2,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   cardTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+    marginBottom: 6,
+  },
+  calleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+    marginRight: 8,
   },
   cardCalle: {
     fontSize: 11,
@@ -355,12 +421,12 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: RADIUS.sm,
   },
-  badgeText: { fontSize: 10, fontWeight: "700" },
+  badgeText: { fontSize: 10, fontWeight: "800" },
   cardCategoria: {
     fontSize: 10,
     color: COLORS.textMuted,
     fontWeight: "700",
-    marginBottom: 4,
+    marginBottom: 3,
   },
   cardTitle: {
     fontSize: 15,
@@ -369,9 +435,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cardDesc: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: COLORS.textMuted,
-    lineHeight: 18,
+    lineHeight: 17,
     marginBottom: SPACING.sm,
   },
   dptoContainer: {
@@ -380,14 +446,14 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: "#F8FAFC",
     paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingVertical: 7,
     borderRadius: RADIUS.sm,
     marginBottom: SPACING.md,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
   dptoText: { fontSize: 11, color: COLORS.textMuted },
-  dptoName: { fontWeight: "800", color: COLORS.textDark },
+  dptoName: { fontWeight: "800", color: COLORS.primaryDark },
   dptoNone: { fontStyle: "italic", color: COLORS.textMuted },
   btnAction: {
     backgroundColor: COLORS.primaryDark,
@@ -395,7 +461,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderRadius: RADIUS.sm,
   },
   btnActionText: {

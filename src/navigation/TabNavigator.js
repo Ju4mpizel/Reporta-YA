@@ -17,14 +17,17 @@ export default function TabNavigator() {
 
   return (
     <Tab.Navigator
-      initialRouteName="Incidentes"
+      initialRouteName="Mapa" // <-- Pantalla por defecto al abrir la aplicación
       tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+        animation: "fade", // Suaviza la transición entre pestañas
+      }}
     >
       <Tab.Screen name="Reportar" component={NuevoIncidenteScreen} />
       <Tab.Screen name="Mapa" component={MapaScreen} />
       <Tab.Screen name="Incidentes" component={IncidenteScreen} />
-      {/* Si el usuario es Administrador (Ing. Carlos Mendoza), se agrega la 5ta pestaña */}
+      {/* Si el usuario es Administrador se agrega la pestaña de Panel */}
       {esAdmin && <Tab.Screen name="Panel" component={AdminPanelScreen} />}
       <Tab.Screen name="Perfil" component={PerfilScreen} />
     </Tab.Navigator>

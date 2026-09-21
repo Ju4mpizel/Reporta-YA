@@ -30,20 +30,46 @@ export default function AppNavigator() {
   }
 
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        animation: "slide_from_right", // Deslizamiento profesional entre pantallas
+        animationDuration: 280,
+      }}
+    >
       {estaAutenticado ? (
         <>
-          <Stack.Screen name="MainTabs" component={TabNavigator} />
-          {/* Pantalla 2 de gestión para el administrador */}
+          <Stack.Screen
+            name="MainTabs"
+            component={TabNavigator}
+            options={{
+              animation: "fade", // Transición suave tras iniciar sesión
+            }}
+          />
           <Stack.Screen
             name="GestionIncidente"
             component={GestionIncidenteScreen}
+            options={{
+              animation: "slide_from_right",
+            }}
           />
         </>
       ) : (
         <>
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Registro" component={RegistroScreen} />
+          <Stack.Screen
+            name="Login"
+            component={LoginScreen}
+            options={{
+              animation: "fade",
+            }}
+          />
+          <Stack.Screen
+            name="Registro"
+            component={RegistroScreen}
+            options={{
+              animation: "slide_from_right",
+            }}
+          />
         </>
       )}
     </Stack.Navigator>

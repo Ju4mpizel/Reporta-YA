@@ -32,7 +32,7 @@ import { incidentesService } from "../services/incidentesService";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 import FiltrosAcordeon from "../components/FiltrosAcordeon";
 
-// Componente individual animado para cada tarjeta del reporte
+// Componente individual animado para cada tarjeta del reporte ciudadano
 function IncidenteItemCard({
   item,
   index,
@@ -48,25 +48,23 @@ function IncidenteItemCard({
   const StatusIcon = badge.Icon;
 
   useEffect(() => {
-    // Animación de entrada escalonada
     Animated.parallel([
       Animated.timing(animFade, {
         toValue: 1,
         duration: 320,
-        delay: Math.min(index * 60, 400),
+        delay: Math.min(index * 60, 360),
         useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(animTranslateY, {
         toValue: 0,
         duration: 320,
-        delay: Math.min(index * 60, 400),
+        delay: Math.min(index * 60, 360),
         useNativeDriver: Platform.OS !== "web",
       }),
     ]).start();
   }, []);
 
   const handlePresionarApoyo = () => {
-    // Micro-rebote elástico del botón de apoyo
     Animated.sequence([
       Animated.timing(animEscalaApoyo, {
         toValue: 0.88,
@@ -99,13 +97,19 @@ function IncidenteItemCard({
         <View style={styles.bannerSeleccionado}>
           <MapPin size={11} color="#FFFFFF" strokeWidth={2.4} />
           <Text style={styles.bannerSeleccionadoText}>
-            REPORTE SELECCIONADO EN MAPA
+            EXPEDIENTE SELECCIONADO EN MAPA
           </Text>
         </View>
       )}
 
+      {/* Encabezado de la Tarjeta */}
       <View style={styles.cardTop}>
-        <Text style={styles.cardCalle}>{item.calle_nombre}</Text>
+        <View style={styles.calleContainer}>
+          <MapPin size={12} color={COLORS.primary} strokeWidth={2.4} />
+          <Text style={styles.cardCalle} numberOfLines={1}>
+            {item.calle_nombre}
+          </Text>
+        </View>
         <View style={[styles.badge, { backgroundColor: badge.bg }]}>
           <StatusIcon size={11} color={badge.text} strokeWidth={2.4} />
           <Text style={[styles.badgeText, { color: badge.text }]}>
@@ -118,54 +122,56 @@ function IncidenteItemCard({
       <Text style={styles.cardTitle}>{item.titulo}</Text>
       <Text style={styles.cardDesc}>{item.descripcion}</Text>
 
-      {/* 1. Botón Google Maps */}
-      {item.maps_url ? (
+      {/* Acciones Cartográficas */}
+      <View style={styles.linksContainer}>
+        {item.maps_url ? (
+          <TouchableOpacity
+            style={styles.btnMapsLink}
+            activeOpacity={0.7}
+            onPress={() => Linking.openURL(item.maps_url)}
+          >
+            <MapPin size={11} color="#059669" strokeWidth={2.2} />
+            <Text style={styles.btnMapsLinkText}>Abrir en Google Maps</Text>
+            <ExternalLink size={11} color="#059669" />
+          </TouchableOpacity>
+        ) : null}
+
         <TouchableOpacity
-          style={styles.btnMapsLink}
+          style={styles.btnVerEnMapaApp}
           activeOpacity={0.7}
-          onPress={() => Linking.openURL(item.maps_url)}
+          onPress={() => onVerMapaApp(item.id)}
         >
-          <MapPin size={11} color="#059669" strokeWidth={2.2} />
-          <Text style={styles.btnMapsLinkText}>
-            Ver ubicación en Google Maps
+          <Map size={11} color={COLORS.primary} strokeWidth={2.2} />
+          <Text style={styles.btnVerEnMapaAppText}>
+            Ver en mapa interactivo
           </Text>
-          <ExternalLink size={11} color="#059669" />
         </TouchableOpacity>
-      ) : null}
+      </View>
 
-      {/* 2. Botón inverso hacia el mapa interactivo de la app */}
-      <TouchableOpacity
-        style={styles.btnVerEnMapaApp}
-        activeOpacity={0.7}
-        onPress={() => onVerMapaApp(item.id)}
-      >
-        <Map size={11} color={COLORS.primary} strokeWidth={2.2} />
-        <Text style={styles.btnVerEnMapaAppText}>
-          Ver ubicación en el mapa de incidentes
-        </Text>
-      </TouchableOpacity>
-
+      {/* Unidad Responsable */}
       {item.departamento_nombre && (
         <View style={styles.dptoBadge}>
-          <Building2 size={12} color={COLORS.textDark} />
+          <Building2 size={12} color={COLORS.primaryDark} />
           <Text style={styles.dptoBadgeText}>
             Unidad: {item.departamento_nombre}
           </Text>
         </View>
       )}
 
+      {/* Dictamen o Resolución Municipal */}
       {item.nota_alcaldia ? (
         <View style={styles.notaAlcaldiaBox}>
           <View style={styles.notaAlcaldiaHeader}>
-            <ShieldCheck size={13} color={COLORS.primary} strokeWidth={2.2} />
+            <ShieldCheck size={13} color={COLORS.primary} strokeWidth={2.4} />
             <Text style={styles.notaAlcaldiaTitle}>
-              RESOLUCIÓN MUNICIPAL (D-12)
+              RESOLUCIÓN MUNICIPAL OFICIAL
             </Text>
           </View>
           <Text style={styles.notaAlcaldiaText}>{item.nota_alcaldia}</Text>
         </View>
       ) : null}
 
+      {/* Pie de Tarjeta */}
       <View style={styles.cardFooter}>
         <View style={styles.dateRow}>
           <Calendar size={12} color={COLORS.textSubtle} />
@@ -177,12 +183,12 @@ function IncidenteItemCard({
         <Animated.View style={{ transform: [{ scale: animEscalaApoyo }] }}>
           <TouchableOpacity
             style={styles.btnApoyo}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
             onPress={handlePresionarApoyo}
           >
             <ThumbsUp size={12} color={COLORS.primaryDark} strokeWidth={2.4} />
             <Text style={styles.btnApoyoText}>
-              Apoyar ({item.total_apoyos})
+              Respaldar ({item.total_apoyos})
             </Text>
           </TouchableOpacity>
         </Animated.View>
@@ -210,7 +216,6 @@ export default function IncidenteScreen({ route, navigation }) {
     }, []),
   );
 
-  // PATRÓN OBSERVER: Sincronización en tiempo real
   useEffect(() => {
     const cancelarSuscripcion = incidentesService.suscribirACambios(() => {
       cargarIncidentes();
@@ -221,7 +226,6 @@ export default function IncidenteScreen({ route, navigation }) {
     };
   }, []);
 
-  // Control seguro del scroll con debounce y comprobación de montaje
   useEffect(() => {
     if (incidenteIdSeleccionado && incidentes.length > 0) {
       const index = incidentes.findIndex(
@@ -297,22 +301,22 @@ export default function IncidenteScreen({ route, navigation }) {
       case "en_revision":
         return {
           label: "En Revisión",
-          bg: COLORS.amberBg,
-          text: COLORS.amber,
+          bg: "#FEF3C7",
+          text: "#B45309",
           Icon: Clock,
         };
       case "realizando_trabajos":
         return {
           label: "En Trabajos",
-          bg: COLORS.blueBg,
-          text: COLORS.blue,
+          bg: "#DBEAFE",
+          text: "#1D4ED8",
           Icon: Wrench,
         };
       case "hecho":
         return {
           label: "Resuelto",
-          bg: COLORS.greenBg,
-          text: COLORS.green,
+          bg: "#DCFCE7",
+          text: "#15803D",
           Icon: CheckCircle2,
         };
       case "rechazado":
@@ -334,10 +338,12 @@ export default function IncidenteScreen({ route, navigation }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerSub}>
-          ZONA PILOTO: {zonaActiva.toUpperCase()}
-        </Text>
+      {/* Header Institucional Curvo Homologado */}
+      <View style={styles.headerDark}>
+        <View style={styles.headerTopLine}>
+          <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
+          <Text style={styles.headerSub}>SUBALCALDÍA CALA CALA · D-12</Text>
+        </View>
         <Text style={styles.headerTitle}>Incidentes Urbanos</Text>
       </View>
 
@@ -353,7 +359,9 @@ export default function IncidenteScreen({ route, navigation }) {
       {cargando ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Cargando incidentes...</Text>
+          <Text style={styles.loadingText}>
+            Cargando incidentes distritales...
+          </Text>
         </View>
       ) : (
         <FlatList
@@ -397,25 +405,31 @@ export default function IncidenteScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    backgroundColor: COLORS.surface,
+  headerDark: {
+    backgroundColor: "#0F172A",
     paddingHorizontal: SPACING.lg,
-    paddingTop: 50,
+    paddingTop: 52,
     paddingBottom: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomLeftRadius: RADIUS.lg,
+    borderBottomRightRadius: RADIUS.lg,
+    elevation: 3,
+  },
+  headerTopLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
   },
   headerSub: {
     fontSize: 10,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: "#38BDF8",
     letterSpacing: 1,
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    marginTop: 2,
+    fontWeight: "900",
+    color: "#FFFFFF",
   },
   centerContainer: {
     flex: 1,
@@ -431,7 +445,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: SPACING.lg,
-    paddingBottom: SPACING.bottomInset,
+    paddingBottom: SPACING.bottomInset || 20,
   },
   card: {
     backgroundColor: COLORS.surface,
@@ -441,6 +455,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     elevation: 2,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   cardSeleccionada: {
     borderWidth: 2,
@@ -460,7 +478,7 @@ const styles = StyleSheet.create({
   },
   bannerSeleccionadoText: {
     color: "#FFFFFF",
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: "800",
     letterSpacing: 0.5,
   },
@@ -469,6 +487,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 4,
+  },
+  calleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    flex: 1,
+    marginRight: 8,
   },
   cardCalle: {
     fontSize: 11,
@@ -484,7 +509,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: RADIUS.sm,
   },
-  badgeText: { fontSize: 10, fontWeight: "700" },
+  badgeText: { fontSize: 10, fontWeight: "800" },
   cardCategoria: {
     fontSize: 10,
     color: COLORS.textMuted,
@@ -498,24 +523,27 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   cardDesc: {
-    fontSize: 13,
+    fontSize: 12.5,
     color: COLORS.textMuted,
     lineHeight: 18,
     marginBottom: SPACING.xs,
   },
+  linksContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginVertical: 4,
+  },
   btnMapsLink: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
     backgroundColor: "#ECFDF5",
     borderWidth: 1,
     borderColor: "#A7F3D0",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
-    alignSelf: "flex-start",
-    marginTop: 4,
-    marginBottom: 4,
   },
   btnMapsLinkText: {
     fontSize: 10,
@@ -525,15 +553,13 @@ const styles = StyleSheet.create({
   btnVerEnMapaApp: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 4,
     backgroundColor: "#EFF6FF",
     borderWidth: 1,
     borderColor: "#BFDBFE",
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
-    alignSelf: "flex-start",
-    marginBottom: 6,
   },
   btnVerEnMapaAppText: {
     fontSize: 10,
@@ -549,7 +575,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: RADIUS.sm,
     alignSelf: "flex-start",
-    marginTop: 2,
+    marginTop: 4,
     marginBottom: 6,
   },
   dptoBadgeText: {

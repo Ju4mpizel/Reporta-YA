@@ -1,6 +1,13 @@
 // src/components/CustomTabBar.js
-import React from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useEffect, useRef } from "react";
+import {
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Platform,
+  Dimensions,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   MapPin,
@@ -13,6 +20,19 @@ import { COLORS } from "../constants/theme";
 
 export default function CustomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
+  const totalTabs = state.routes.length;
+
+  // Valor animado que interpola la posición horizontal de la pastilla activa
+  const animIndex = useRef(new Animated.Value(state.index)).current;
+
+  useEffect(() => {
+    Animated.spring(animIndex, {
+      toValue: state.index,
+      friction: 6,
+      tension: 90,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [state.index]);
 
   return (
     <View
@@ -22,6 +42,28 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
       ]}
     >
       <View style={styles.barContainer}>
+        {/* Pastilla indicadora activa deslizante */}
+        <Animated.View
+          style={[
+            styles.activeIndicator,
+            {
+              width: `${100 / totalTabs}%`,
+              transform: [
+                {
+                  translateX: animIndex.interpolate({
+                    inputRange: state.routes.map((_, i) => i),
+                    outputRange: state.routes.map(
+                      (_, i) => (i * 350) / totalTabs, // Se autoajusta proporcionalmente
+                    ),
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <View style={styles.activePillShape} />
+        </Animated.View>
+
         {state.routes.map((route, index) => {
           const isFocused = state.index === index;
           const isAction = route.name === "Reportar";
@@ -38,7 +80,6 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             }
           };
 
-          // Botón "+" destacado central/izquierdo para registrar incidente
           if (isAction) {
             return (
               <View key={route.key} style={styles.navSlot}>
@@ -53,7 +94,6 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             );
           }
 
-          // Asignación de iconos
           let Icon = ClipboardList;
           if (route.name === "Mapa") Icon = MapPin;
           if (route.name === "Incidentes") Icon = ClipboardList;
@@ -62,19 +102,20 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             Icon = ShieldAlert;
 
           return (
-            <View key={route.key} style={styles.navSlot}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={onPress}
-                style={[styles.tabBox, isFocused && styles.tabBoxActive]}
-              >
+            <TouchableOpacity
+              key={route.key}
+              activeOpacity={0.7}
+              onPress={onPress}
+              style={styles.navSlot}
+            >
+              <View style={styles.iconContainer}>
                 <Icon
                   size={21}
                   color={isFocused ? COLORS.primary : "#94A3B8"}
-                  strokeWidth={isFocused ? 2.4 : 1.9}
+                  strokeWidth={isFocused ? 2.6 : 1.9}
                 />
-              </TouchableOpacity>
-            </View>
+              </View>
+            </TouchableOpacity>
           );
         })}
       </View>
@@ -84,17 +125,17 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
 
 const styles = StyleSheet.create({
   wrapper: {
-    // Se elimina position: "absolute" para que ocupe su propio bloque
-    backgroundColor: COLORS.background, // Mismo fondo que la app para que la pastilla resalte
+    backgroundColor: COLORS.background,
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 8,
   },
   barContainer: {
+    position: "relative",
     flexDirection: "row",
     width: "90%",
     maxWidth: 390,
-    height: 60,
+    height: 62,
     backgroundColor: "#FFFFFF",
     borderRadius: 24,
     alignItems: "center",
@@ -107,9 +148,33 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
+    overflow: "hidden",
+  },
+  activeIndicator: {
+    position: "absolute",
+    height: "100%",
+    top: 0,
+    left: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 0,
+  },
+  activePillShape: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#E0F2FE",
   },
   navSlot: {
     flex: 1,
+    height: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  iconContainer: {
+    width: 42,
+    height: 42,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -125,16 +190,5 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.35,
     shadowRadius: 5,
-  },
-  tabBox: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "transparent",
-  },
-  tabBoxActive: {
-    backgroundColor: "#E0F2FE",
   },
 });

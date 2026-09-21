@@ -1,5 +1,5 @@
 // src/screens/GestionIncidenteScreen.js
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -9,7 +9,9 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
-  Linking, // <-- Permite al admin verificar la ubicación del reporte en Google Maps
+  Linking,
+  Animated,
+  Platform,
 } from "react-native";
 import {
   ArrowLeft,
@@ -18,13 +20,13 @@ import {
   Clock,
   ThumbsUp,
   User,
-  Image as ImageIcon,
   ChevronDown,
   ChevronUp,
   Check,
   CheckCircle2,
   MapPin,
   ExternalLink,
+  FileCheck,
 } from "lucide-react-native";
 import { supabase } from "../services/supabase";
 import { incidentesService } from "../services/incidentesService";
@@ -55,6 +57,16 @@ export default function GestionIncidenteScreen({ route, navigation }) {
   const [cargandoDeptos, setCargandoDeptos] = useState(true);
   const [guardando, setGuardando] = useState(false);
   const [modalExitoVisible, setModalExitoVisible] = useState(false);
+
+  const animFade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(animFade, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, []);
 
   useEffect(() => {
     cargarDepartamentos();
@@ -117,7 +129,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
 
   return (
     <View style={styles.screenWrapper}>
-      {/* Header Institucional Oscuro */}
+      {/* Header Oscuro Institucional */}
       <View style={styles.headerDark}>
         <TouchableOpacity
           style={styles.btnBack}
@@ -128,7 +140,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
           <Text style={styles.btnBackText}>Volver a la Bandeja</Text>
         </TouchableOpacity>
         <Text style={styles.headerSub}>GESTIÓN OPERATIVA · DISTRITO 12</Text>
-        <Text style={styles.headerTitle}>Asignar y Dictaminar</Text>
+        <Text style={styles.headerTitle}>Dictamen de Expediente</Text>
       </View>
 
       <ScrollView
@@ -136,243 +148,259 @@ export default function GestionIncidenteScreen({ route, navigation }) {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.summaryCard}>
-          <View style={styles.imgPlaceholder}>
-            <ImageIcon size={22} color="#94A3B8" />
-            <Text style={styles.imgPlaceholderText}>[ FOTO ]</Text>
-          </View>
-          <View style={styles.summaryInfo}>
-            <Text style={styles.summaryCalle}>{incidente.calle_nombre}</Text>
-            <Text style={styles.summaryTitle}>{incidente.titulo}</Text>
-            <View style={styles.infoLine}>
-              <User size={11} color={COLORS.textMuted} />
-              <Text style={styles.infoLineText}>
-                Vecino: {incidente.usuario_nombre || "Vecino Registrado"}
-              </Text>
-            </View>
-            <View style={styles.infoLine}>
-              <ThumbsUp size={11} color={COLORS.primary} strokeWidth={2.2} />
-              <Text style={styles.infoLineVotes}>
-                {incidente.total_apoyos} respaldos
-              </Text>
-            </View>
-
-            {/* Enlace para que el administrador valide la calle en Google Maps */}
-            {incidente.maps_url ? (
-              <TouchableOpacity
-                style={styles.btnAdminMaps}
-                activeOpacity={0.7}
-                onPress={() => Linking.openURL(incidente.maps_url)}
-              >
-                <MapPin size={11} color="#0284C7" strokeWidth={2.2} />
-                <Text style={styles.btnAdminMapsText}>
-                  Ver punto en Google Maps
-                </Text>
-                <ExternalLink size={10} color="#0284C7" />
-              </TouchableOpacity>
-            ) : null}
-          </View>
-        </View>
-
-        {/* Paso 1: Departamento */}
-        <View style={styles.accordionContainer}>
-          <TouchableOpacity
-            style={styles.accordionHeader}
-            activeOpacity={0.7}
-            onPress={() => toggleAcordeon("departamento")}
-          >
-            <View style={styles.accordionHeaderLeft}>
-              <Building2 size={16} color={COLORS.primary} strokeWidth={2.2} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.accordionStep}>
-                  PASO 1 · UNIDAD RESPONSABLE
-                </Text>
-                <Text style={styles.accordionValue} numberOfLines={1}>
-                  {nombreDeptoActual}
+        <Animated.View style={{ opacity: animFade }}>
+          {/* Tarjeta Resumen del Incidente */}
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryInfo}>
+              <View style={styles.badgeJurisdiccion}>
+                <MapPin size={10} color={COLORS.primary} strokeWidth={2.5} />
+                <Text style={styles.summaryCalle}>
+                  {incidente.calle_nombre}
                 </Text>
               </View>
-            </View>
-            {acordeonAbierto === "departamento" ? (
-              <ChevronUp size={16} color={COLORS.textDark} />
-            ) : (
-              <ChevronDown size={16} color={COLORS.textDark} />
-            )}
-          </TouchableOpacity>
 
-          {acordeonAbierto === "departamento" && (
-            <View style={styles.accordionBody}>
-              {cargandoDeptos ? (
-                <ActivityIndicator
-                  size="small"
-                  color={COLORS.primary}
-                  style={{ padding: 10 }}
-                />
+              <Text style={styles.summaryTitle}>{incidente.titulo}</Text>
+              <Text style={styles.summaryDesc}>{incidente.descripcion}</Text>
+
+              <View style={styles.metaRow}>
+                <View style={styles.infoLine}>
+                  <User size={11} color={COLORS.textMuted} />
+                  <Text style={styles.infoLineText}>
+                    Vecino: {incidente.usuario_nombre || "Vecino Registrado"}
+                  </Text>
+                </View>
+                <View style={styles.infoLine}>
+                  <ThumbsUp
+                    size={11}
+                    color={COLORS.primary}
+                    strokeWidth={2.2}
+                  />
+                  <Text style={styles.infoLineVotes}>
+                    {incidente.total_apoyos} respaldos
+                  </Text>
+                </View>
+              </View>
+
+              {incidente.maps_url ? (
+                <TouchableOpacity
+                  style={styles.btnAdminMaps}
+                  activeOpacity={0.7}
+                  onPress={() => Linking.openURL(incidente.maps_url)}
+                >
+                  <MapPin size={11} color="#0284C7" strokeWidth={2.2} />
+                  <Text style={styles.btnAdminMapsText}>
+                    Ver punto exacto en Google Maps
+                  </Text>
+                  <ExternalLink size={10} color="#0284C7" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          </View>
+
+          {/* Paso 1: Departamento */}
+          <View style={styles.accordionContainer}>
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              activeOpacity={0.7}
+              onPress={() => toggleAcordeon("departamento")}
+            >
+              <View style={styles.accordionHeaderLeft}>
+                <Building2 size={16} color={COLORS.primary} strokeWidth={2.2} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.accordionStep}>
+                    PASO 1 · UNIDAD RESPONSABLE
+                  </Text>
+                  <Text style={styles.accordionValue} numberOfLines={1}>
+                    {nombreDeptoActual}
+                  </Text>
+                </View>
+              </View>
+              {acordeonAbierto === "departamento" ? (
+                <ChevronUp size={16} color={COLORS.textDark} />
               ) : (
-                <>
-                  <TouchableOpacity
-                    style={[
-                      styles.optionItem,
-                      deptoSeleccionado === null && styles.optionItemActive,
-                    ]}
-                    onPress={() => {
-                      setDeptoSeleccionado(null);
-                      setAcordeonAbierto(null);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.optionContent}>
-                      {deptoSeleccionado === null && (
-                        <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
-                      )}
-                      <Text
-                        style={[
-                          styles.optionText,
-                          deptoSeleccionado === null && styles.optionTextActive,
-                          { fontStyle: "italic" },
-                        ]}
-                      >
-                        -- Sin Asignar (Pendiente) --
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {departamentos.map((dpto) => {
-                    const activo = deptoSeleccionado === dpto.id;
-                    return (
-                      <TouchableOpacity
-                        key={dpto.id}
-                        style={[
-                          styles.optionItem,
-                          activo && styles.optionItemActive,
-                        ]}
-                        onPress={() => {
-                          setDeptoSeleccionado(dpto.id);
-                          setAcordeonAbierto(null);
-                        }}
-                        activeOpacity={0.7}
-                      >
-                        <View style={styles.optionContent}>
-                          {activo && (
-                            <Check
-                              size={14}
-                              color="#FFFFFF"
-                              strokeWidth={2.5}
-                            />
-                          )}
-                          <Text
-                            style={[
-                              styles.optionText,
-                              activo && styles.optionTextActive,
-                            ]}
-                          >
-                            {dpto.nombre}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
+                <ChevronDown size={16} color={COLORS.textDark} />
               )}
-            </View>
-          )}
-        </View>
+            </TouchableOpacity>
 
-        {/* Paso 2: Estado */}
-        <View style={styles.accordionContainer}>
-          <TouchableOpacity
-            style={styles.accordionHeader}
-            activeOpacity={0.7}
-            onPress={() => toggleAcordeon("estado")}
-          >
-            <View style={styles.accordionHeaderLeft}>
-              <Clock size={16} color={COLORS.primary} strokeWidth={2.2} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.accordionStep}>
-                  PASO 2 · ESTADO DEL INCIDENTE
-                </Text>
-                <Text style={styles.accordionValue} numberOfLines={1}>
-                  {etiquetaEstadoActual}
-                </Text>
+            {acordeonAbierto === "departamento" && (
+              <View style={styles.accordionBody}>
+                {cargandoDeptos ? (
+                  <ActivityIndicator
+                    size="small"
+                    color={COLORS.primary}
+                    style={{ padding: 10 }}
+                  />
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={[
+                        styles.optionItem,
+                        deptoSeleccionado === null && styles.optionItemActive,
+                      ]}
+                      onPress={() => {
+                        setDeptoSeleccionado(null);
+                        setAcordeonAbierto(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.optionContent}>
+                        {deptoSeleccionado === null && (
+                          <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
+                        )}
+                        <Text
+                          style={[
+                            styles.optionText,
+                            deptoSeleccionado === null &&
+                              styles.optionTextActive,
+                            { fontStyle: "italic" },
+                          ]}
+                        >
+                          -- Sin Asignar (Pendiente) --
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {departamentos.map((dpto) => {
+                      const activo = deptoSeleccionado === dpto.id;
+                      return (
+                        <TouchableOpacity
+                          key={dpto.id}
+                          style={[
+                            styles.optionItem,
+                            activo && styles.optionItemActive,
+                          ]}
+                          onPress={() => {
+                            setDeptoSeleccionado(dpto.id);
+                            setAcordeonAbierto(null);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <View style={styles.optionContent}>
+                            {activo && (
+                              <Check
+                                size={14}
+                                color="#FFFFFF"
+                                strokeWidth={2.5}
+                              />
+                            )}
+                            <Text
+                              style={[
+                                styles.optionText,
+                                activo && styles.optionTextActive,
+                              ]}
+                            >
+                              {dpto.nombre}
+                            </Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </>
+                )}
               </View>
-            </View>
-            {acordeonAbierto === "estado" ? (
-              <ChevronUp size={16} color={COLORS.textDark} />
-            ) : (
-              <ChevronDown size={16} color={COLORS.textDark} />
             )}
-          </TouchableOpacity>
+          </View>
 
-          {acordeonAbierto === "estado" && (
-            <View style={styles.accordionBody}>
-              {ESTADOS_DISPONIBLES.map((est) => {
-                const activo = estadoSeleccionado === est.key;
-                return (
-                  <TouchableOpacity
-                    key={est.key}
-                    style={[
-                      styles.optionItem,
-                      activo && styles.optionItemActive,
-                    ]}
-                    onPress={() => {
-                      setEstadoSeleccionado(est.key);
-                      setAcordeonAbierto(null);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.optionContent}>
-                      {activo && (
-                        <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
-                      )}
-                      <Text
-                        style={[
-                          styles.optionText,
-                          activo && styles.optionTextActive,
-                        ]}
-                      >
-                        {est.label}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
-        </View>
+          {/* Paso 2: Estado */}
+          <View style={styles.accordionContainer}>
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              activeOpacity={0.7}
+              onPress={() => toggleAcordeon("estado")}
+            >
+              <View style={styles.accordionHeaderLeft}>
+                <Clock size={16} color={COLORS.primary} strokeWidth={2.2} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.accordionStep}>
+                    PASO 2 · ESTADO DEL EXPEDIENTE
+                  </Text>
+                  <Text style={styles.accordionValue} numberOfLines={1}>
+                    {etiquetaEstadoActual}
+                  </Text>
+                </View>
+              </View>
+              {acordeonAbierto === "estado" ? (
+                <ChevronUp size={16} color={COLORS.textDark} />
+              ) : (
+                <ChevronDown size={16} color={COLORS.textDark} />
+              )}
+            </TouchableOpacity>
 
-        {/* Paso 3: Nota Alcaldía */}
-        <View style={styles.formGroup}>
-          <Text style={styles.formLabel}>
-            PASO 3 · NOTA OFICIAL DE LA ALCALDÍA
-          </Text>
-          <TextInput
-            style={styles.textarea}
-            placeholder="Escribe la instrucción o respuesta que verán los vecinos..."
-            placeholderTextColor={COLORS.textSubtle}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            value={notaMunicipal}
-            onChangeText={setNotaMunicipal}
-          />
-        </View>
+            {acordeonAbierto === "estado" && (
+              <View style={styles.accordionBody}>
+                {ESTADOS_DISPONIBLES.map((est) => {
+                  const activo = estadoSeleccionado === est.key;
+                  return (
+                    <TouchableOpacity
+                      key={est.key}
+                      style={[
+                        styles.optionItem,
+                        activo && styles.optionItemActive,
+                      ]}
+                      onPress={() => {
+                        setEstadoSeleccionado(est.key);
+                        setAcordeonAbierto(null);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.optionContent}>
+                        {activo && (
+                          <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
+                        )}
+                        <Text
+                          style={[
+                            styles.optionText,
+                            activo && styles.optionTextActive,
+                          ]}
+                        >
+                          {est.label}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
 
-        <TouchableOpacity
-          style={[styles.btnSubmit, guardando && styles.btnDisabled]}
-          onPress={handleGuardar}
-          disabled={guardando}
-          activeOpacity={0.8}
-        >
-          {guardando ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <View style={styles.btnContent}>
-              <ShieldCheck size={16} color="#FFFFFF" strokeWidth={2.4} />
-              <Text style={styles.btnSubmitText}>
-                Guardar Asignación y Estado
+          {/* Paso 3: Nota Oficial */}
+          <View style={styles.formGroup}>
+            <View style={styles.formLabelRow}>
+              <FileCheck size={13} color={COLORS.primary} />
+              <Text style={styles.formLabel}>
+                PASO 3 · NOTA OFICIAL DE LA ALCALDÍA
               </Text>
             </View>
-          )}
-        </TouchableOpacity>
+            <TextInput
+              style={styles.textarea}
+              placeholder="Escribe la instrucción técnica o respuesta para la ciudadanía..."
+              placeholderTextColor={COLORS.textSubtle}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              value={notaMunicipal}
+              onChangeText={setNotaMunicipal}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.btnSubmit, guardando && styles.btnDisabled]}
+            onPress={handleGuardar}
+            disabled={guardando}
+            activeOpacity={0.8}
+          >
+            {guardando ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <View style={styles.btnContent}>
+                <ShieldCheck size={16} color="#FFFFFF" strokeWidth={2.4} />
+                <Text style={styles.btnSubmitText}>
+                  Guardar Asignación y Estado
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
 
       {/* Modal Bottom Sheet de Éxito */}
@@ -393,7 +421,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
             <View style={styles.modalIconWrap}>
               <CheckCircle2 size={32} color="#16A34A" strokeWidth={2.4} />
             </View>
-            <Text style={styles.modalTitle}>¡Dictamen Actualizado!</Text>
+            <Text style={styles.modalTitle}>¡Expediente Actualizado!</Text>
             <Text style={styles.modalDesc}>
               La unidad responsable, el estado y la resolución oficial fueron
               registrados correctamente en el padrón municipal.
@@ -424,6 +452,7 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.md,
     borderBottomLeftRadius: RADIUS.lg,
     borderBottomRightRadius: RADIUS.lg,
+    elevation: 3,
   },
   btnBack: {
     flexDirection: "row",
@@ -445,10 +474,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   container: { flex: 1 },
-  content: { padding: SPACING.lg, paddingBottom: SPACING.bottomInset },
+  content: { padding: SPACING.lg, paddingBottom: SPACING.bottomInset || 20 },
   summaryCard: {
-    flexDirection: "row",
-    gap: SPACING.sm,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -457,56 +484,63 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     elevation: 1,
   },
-  imgPlaceholder: {
-    width: 65,
-    height: 65,
-    borderWidth: 1.5,
-    borderStyle: "dashed",
-    borderColor: "#CBD5E1",
-    borderRadius: RADIUS.sm,
-    backgroundColor: "#F8FAFC",
+  summaryInfo: { flex: 1 },
+  badgeJurisdiccion: {
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 2,
+    gap: 4,
+    backgroundColor: "#F0F9FF",
+    alignSelf: "flex-start",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    marginBottom: 6,
   },
-  imgPlaceholderText: { fontSize: 8, fontWeight: "800", color: "#94A3B8" },
-  summaryInfo: { flex: 1, justifyContent: "center" },
   summaryCalle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "800",
     color: COLORS.primary,
     textTransform: "uppercase",
-    marginBottom: 2,
   },
   summaryTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "800",
     color: COLORS.textDark,
     marginBottom: 4,
   },
-  infoLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginBottom: 2,
+  summaryDesc: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    lineHeight: 17,
+    marginBottom: 8,
   },
-  infoLineText: { fontSize: 10, color: COLORS.textMuted },
-  infoLineVotes: { fontSize: 10, fontWeight: "700", color: COLORS.primary },
+  metaRow: {
+    flexDirection: "row",
+    gap: 12,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    marginBottom: 6,
+  },
+  infoLine: { flexDirection: "row", alignItems: "center", gap: 5 },
+  infoLineText: { fontSize: 10.5, color: COLORS.textMuted },
+  infoLineVotes: { fontSize: 10.5, fontWeight: "700", color: COLORS.primary },
+
   btnAdminMaps: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    marginTop: 5,
+    gap: 5,
+    marginTop: 4,
     backgroundColor: "#F0F9FF",
     borderWidth: 1,
     borderColor: "#BAE6FD",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: RADIUS.sm,
     alignSelf: "flex-start",
   },
   btnAdminMapsText: {
-    fontSize: 9,
+    fontSize: 9.5,
     fontWeight: "800",
     color: "#0284C7",
   },
@@ -576,12 +610,17 @@ const styles = StyleSheet.create({
   },
 
   formGroup: { marginTop: SPACING.xs, marginBottom: SPACING.md },
+  formLabelRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 6,
+  },
   formLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "800",
     color: COLORS.textMuted,
     letterSpacing: 0.5,
-    marginBottom: 6,
   },
   textarea: {
     backgroundColor: COLORS.surface,
