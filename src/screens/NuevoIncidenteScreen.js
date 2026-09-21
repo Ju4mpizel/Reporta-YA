@@ -23,6 +23,7 @@ import {
   CheckCircle2,
 } from "lucide-react-native";
 import { supabase } from "../services/supabase";
+import { incidentesService } from "../services/incidentesService"; // <-- Uso de la Fachada
 import { useAuth } from "../context/AuthContext";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
@@ -81,7 +82,7 @@ export default function NuevoIncidenteScreen({ navigation }) {
     try {
       const { data, error } = await supabase
         .from("calles")
-        .select("id, nombre, tipo")
+        .select("id, nombre, tipo, google_maps_url")
         .eq("zona_id", zonaId)
         .order("nombre");
 
@@ -116,18 +117,15 @@ export default function NuevoIncidenteScreen({ navigation }) {
     try {
       setEnviando(true);
 
-      const { error } = await supabase.from("incidentes").insert([
-        {
-          usuario_id: perfil?.id,
-          calle_id: calleSeleccionada.id,
-          categoria_id: categoriaSeleccionada.id,
-          titulo: titulo.trim(),
-          descripcion: descripcion.trim(),
-          estado: "en_revision",
-        },
-      ]);
-
-      if (error) throw error;
+      // Delegamos en la fachada incidentesService incluyendo el enlace de Google Maps
+      await incidentesService.crear({
+        usuarioId: perfil?.id,
+        calleId: calleSeleccionada.id,
+        categoriaId: categoriaSeleccionada.id,
+        titulo: titulo.trim(),
+        descripcion: descripcion.trim(),
+        mapsUrl: calleSeleccionada.google_maps_url || null,
+      });
 
       limpiarFormulario();
       setModalExitoVisible(true);
@@ -698,7 +696,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Modal Bottom Sheet */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.6)",

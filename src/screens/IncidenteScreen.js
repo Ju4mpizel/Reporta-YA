@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Linking, // <-- Importado para abrir la app o web de Google Maps
 } from "react-native";
 import {
   Clock,
@@ -20,10 +21,11 @@ import {
   MapPin,
   Building2,
   ShieldCheck,
+  ExternalLink,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
+import { incidentesService } from "../services/incidentesService";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 import FiltrosAcordeon from "../components/FiltrosAcordeon";
 
@@ -46,10 +48,22 @@ export default function IncidenteScreen({ route }) {
     }, []),
   );
 
+  // PATRÓN OBSERVER: Conexión reactiva en tiempo real
+  useEffect(() => {
+    const cancelarSuscripcion = incidentesService.suscribirACambios(() => {
+      cargarIncidentes();
+    });
+
+    return () => {
+      cancelarSuscripcion();
+    };
+  }, []);
+
+  // Comparación numérica segura para IDs enteros
   useEffect(() => {
     if (incidenteIdSeleccionado && incidentes.length > 0) {
       const index = incidentes.findIndex(
-        (i) => i.id === incidenteIdSeleccionado,
+        (i) => Number(i.id) === Number(incidenteIdSeleccionado),
       );
       if (index !== -1 && flatListRef.current) {
         setTimeout(() => {
@@ -70,37 +84,8 @@ export default function IncidenteScreen({ route }) {
   async function cargarIncidentes() {
     try {
       setCargando(true);
-      const { data, error } = await supabase
-        .from("incidentes")
-        .select(
-          `
-          id,
-          titulo,
-          descripcion,
-          estado,
-          nota_alcaldia,
-          departamento_id,
-          created_at,
-          calles ( nombre ),
-          categorias_incidente ( nombre ),
-          departamentos!departamento_id ( nombre ),
-          apoyos_incidente ( usuario_id )
-        `,
-        )
-        .eq("activo", true)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      const formateados = (data || []).map((item) => ({
-        ...item,
-        calle_nombre: item.calles?.nombre || "Vía no especificada",
-        categoria_nombre: item.categorias_incidente?.nombre || "General",
-        departamento_nombre: item.departamentos?.nombre || null,
-        total_apoyos: item.apoyos_incidente ? item.apoyos_incidente.length : 0,
-      }));
-
-      setIncidentes(formateados);
+      const datos = await incidentesService.obtenerParaFeed();
+      setIncidentes(datos);
     } catch (err) {
       console.error("Error al cargar incidentes:", err.message);
     } finally {
@@ -109,7 +94,6 @@ export default function IncidenteScreen({ route }) {
     }
   }
 
-  // Filtrado reactivo en memoria
   const incidentesFiltrados = incidentes.filter((item) => {
     const coincideCalle =
       calleFiltro === "Todas" || item.calle_nombre === calleFiltro;
@@ -128,18 +112,7 @@ export default function IncidenteScreen({ route }) {
     }
 
     try {
-      const { error } = await supabase
-        .from("apoyos_incidente")
-        .insert([{ incidente_id: incidenteId, usuario_id: perfil.id }]);
-
-      if (error) {
-        if (error.code === "23505") {
-          Alert.alert("Aviso", "Ya apoyaste este incidente anteriormente.");
-          return;
-        }
-        throw error;
-      }
-
+      await incidentesService.apoyar(incidenteId, perfil.id);
       setIncidentes((prev) =>
         prev.map((item) =>
           item.id === incidenteId
@@ -148,8 +121,7 @@ export default function IncidenteScreen({ route }) {
         ),
       );
     } catch (err) {
-      console.error("Error al apoyar:", err.message);
-      Alert.alert("Error", "No se pudo registrar tu apoyo.");
+      Alert.alert("Aviso", err.message);
     }
   };
 
@@ -202,7 +174,6 @@ export default function IncidenteScreen({ route }) {
         <Text style={styles.headerTitle}>Incidentes Urbanos</Text>
       </View>
 
-      {/* Filtros Acordeón Interactivos */}
       <FiltrosAcordeon
         zonaSeleccionada={zonaActiva}
         calleSeleccionada={calleFiltro}
@@ -234,7 +205,8 @@ export default function IncidenteScreen({ route }) {
           renderItem={({ item }) => {
             const badge = getBadge(item.estado);
             const StatusIcon = badge.Icon;
-            const esSeleccionado = incidenteIdSeleccionado === item.id;
+            const esSeleccionado =
+              Number(incidenteIdSeleccionado) === Number(item.id);
 
             return (
               <View
@@ -268,6 +240,21 @@ export default function IncidenteScreen({ route }) {
                 </Text>
                 <Text style={styles.cardTitle}>{item.titulo}</Text>
                 <Text style={styles.cardDesc}>{item.descripcion}</Text>
+
+                {/* Botón directo para abrir en Google Maps */}
+                {item.maps_url ? (
+                  <TouchableOpacity
+                    style={styles.btnMapsLink}
+                    activeOpacity={0.7}
+                    onPress={() => Linking.openURL(item.maps_url)}
+                  >
+                    <MapPin size={11} color="#059669" strokeWidth={2.2} />
+                    <Text style={styles.btnMapsLinkText}>
+                      Ver ubicación en Google Maps
+                    </Text>
+                    <ExternalLink size={11} color="#059669" />
+                  </TouchableOpacity>
+                ) : null}
 
                 {item.departamento_nombre && (
                   <View style={styles.dptoBadge}>
@@ -435,6 +422,24 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     lineHeight: 18,
     marginBottom: SPACING.xs,
+  },
+  btnMapsLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "#ECFDF5",
+    borderWidth: 1,
+    borderColor: "#A7F3D0",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+    alignSelf: "flex-start",
+    marginVertical: 4,
+  },
+  btnMapsLinkText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#059669",
   },
   dptoBadge: {
     flexDirection: "row",

@@ -38,7 +38,7 @@ export const authService = {
   async login(ci, password) {
     const { data, error } = await supabase
       .from("perfiles")
-      .select("*, roles(id, nombre, codigo)")
+      .select("*, roles(id, nombre, descripcion)") // Corregido: sin columna 'codigo'
       .eq("ci", ci.trim())
       .eq("password", password.trim())
       .maybeSingle();
@@ -69,13 +69,13 @@ export const authService = {
         {
           ci: ci.trim(),
           nombre_completo: nombreCompleto.trim(),
-          telefono: telefono.trim(),
+          telefono: telefono ? telefono.trim() : null,
           password: password.trim(),
-          rol_id: 1, // Rol vecino por defecto
+          rol_id: "ciudadano", // Corregido: coincide con la clave primaria de 'roles'
           activo: true,
         },
       ])
-      .select("*, roles(id, nombre, codigo)")
+      .select("*, roles(id, nombre, descripcion)")
       .single();
 
     if (error) {
@@ -93,7 +93,7 @@ export const authService = {
   async recargarPerfil(usuarioId) {
     const { data, error } = await supabase
       .from("perfiles")
-      .select("*, roles(id, nombre, codigo)")
+      .select("*, roles(id, nombre, descripcion)")
       .eq("id", usuarioId)
       .single();
 

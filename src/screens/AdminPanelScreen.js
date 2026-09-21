@@ -1,5 +1,5 @@
 // src/screens/AdminPanelScreen.js
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -19,7 +19,7 @@ import {
   ShieldCheck,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { supabase } from "../services/supabase";
+import { incidentesService } from "../services/incidentesService";
 import FiltrosAcordeon from "../components/FiltrosAcordeon";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
@@ -38,42 +38,20 @@ export default function AdminPanelScreen({ navigation }) {
     }, []),
   );
 
+  useEffect(() => {
+    const desuscribir = incidentesService.suscribirACambios(() => {
+      cargarBandeja();
+    });
+
+    return () => {
+      if (desuscribir) desuscribir();
+    };
+  }, []);
+
   async function cargarBandeja() {
     try {
-      setCargando(true);
-      const { data, error } = await supabase
-        .from("incidentes")
-        .select(
-          `
-          id,
-          titulo,
-          descripcion,
-          estado,
-          nota_alcaldia,
-          departamento_id,
-          created_at,
-          calles ( nombre ),
-          categorias_incidente ( nombre ),
-          departamentos!departamento_id ( id, nombre ),
-          perfiles!usuario_id ( nombre_completo ),
-          apoyos_incidente ( usuario_id )
-        `,
-        )
-        .eq("activo", true)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-
-      const formateados = (data || []).map((item) => ({
-        ...item,
-        calle_nombre: item.calles?.nombre || "Vía no especificada",
-        categoria_nombre: item.categorias_incidente?.nombre || "General",
-        departamento_nombre: item.departamentos?.nombre || null,
-        usuario_nombre: item.perfiles?.nombre_completo || "Vecino",
-        total_apoyos: item.apoyos_incidente ? item.apoyos_incidente.length : 0,
-      }));
-
-      setIncidentes(formateados);
+      const datos = await incidentesService.obtenerParaFeed();
+      setIncidentes(Array.isArray(datos) ? datos : []);
     } catch (err) {
       console.error("Error al cargar bandeja admin:", err.message);
     } finally {
@@ -82,8 +60,9 @@ export default function AdminPanelScreen({ navigation }) {
     }
   }
 
-  // Filtrado reactivo en memoria
-  const incidentesFiltrados = incidentes.filter((item) => {
+  const listaSegura = Array.isArray(incidentes) ? incidentes : [];
+
+  const incidentesFiltrados = listaSegura.filter((item) => {
     const coincideCalle =
       calleFiltro === "Todas" || item.calle_nombre === calleFiltro;
     const coincideCat =
@@ -91,11 +70,11 @@ export default function AdminPanelScreen({ navigation }) {
     return coincideCalle && coincideCat;
   });
 
-  const nuevos = incidentes.filter((i) => i.estado === "en_revision").length;
-  const enCurso = incidentes.filter(
+  const nuevos = listaSegura.filter((i) => i.estado === "en_revision").length;
+  const enCurso = listaSegura.filter(
     (i) => i.estado === "realizando_trabajos",
   ).length;
-  const hechos = incidentes.filter((i) => i.estado === "hecho").length;
+  const hechos = listaSegura.filter((i) => i.estado === "hecho").length;
 
   const getBadge = (estado) => {
     switch (estado) {
@@ -139,7 +118,6 @@ export default function AdminPanelScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Header Institucional Oscuro */}
       <View style={styles.headerDark}>
         <View style={styles.headerTopLine}>
           <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
@@ -150,7 +128,6 @@ export default function AdminPanelScreen({ navigation }) {
         <Text style={styles.headerTitle}>Bandeja de Incidentes</Text>
       </View>
 
-      {/* Resumen Operativo */}
       <View style={styles.statsContainer}>
         <View style={styles.statBox}>
           <Text style={[styles.statNum, { color: COLORS.amber }]}>
@@ -172,7 +149,6 @@ export default function AdminPanelScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Filtros Acordeón Interactivos */}
       <FiltrosAcordeon
         zonaSeleccionada={zonaFiltro}
         calleSeleccionada={calleFiltro}
@@ -206,7 +182,7 @@ export default function AdminPanelScreen({ navigation }) {
           renderItem={({ item }) => {
             const badge = getBadge(item.estado);
             const StatusIcon = badge.Icon;
-            const tieneDpto = !!item.departamento_nombre;
+            const tieneDpto = Boolean(item.departamento_nombre);
 
             return (
               <View style={styles.card}>

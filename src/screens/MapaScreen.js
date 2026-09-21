@@ -1,191 +1,270 @@
 // src/screens/MapaScreen.js
-import React, { useEffect, useState } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   Text,
   View,
   ActivityIndicator,
-  Platform,
   TouchableOpacity,
   ScrollView,
+  Linking,
 } from "react-native";
-import { MapPin, Info, Navigation, ExternalLink } from "lucide-react-native";
-import { supabase } from "../services/supabase";
+import {
+  MapPin,
+  Navigation,
+  ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  List,
+  Check,
+  ChevronRight,
+} from "lucide-react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { incidentesService } from "../services/incidentesService";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
-
-const CALA_CALA_LAT = -17.3734;
-const CALA_CALA_LNG = -66.1625;
 
 export default function MapaScreen({ navigation }) {
   const [incidentes, setIncidentes] = useState([]);
+  const [incidenteActivo, setIncidenteActivo] = useState(null);
   const [cargando, setCargando] = useState(true);
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
+  useFocusEffect(
+    useCallback(() => {
+      cargarIncidentes();
+    }, []),
+  );
+
+  // PATRÓN OBSERVER: Recarga reactiva en vivo
   useEffect(() => {
-    cargarIncidentes();
+    const desuscribir = incidentesService.suscribirACambios(() => {
+      cargarIncidentes();
+    });
 
-    const handleMessage = (event) => {
-      try {
-        const data =
-          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (data && data.tipo === "SELECCIONAR_INCIDENTE") {
-          navigation.navigate("Incidentes", {
-            incidenteIdSeleccionado: data.id,
-          });
-        }
-      } catch (err) {}
+    return () => {
+      if (desuscribir) desuscribir();
     };
-
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      window.addEventListener("message", handleMessage);
-      return () => window.removeEventListener("message", handleMessage);
-    }
   }, []);
 
   async function cargarIncidentes() {
     try {
       setCargando(true);
-      const { data, error } = await supabase
-        .from("incidentes")
-        .select(
-          `
-          id,
-          titulo,
-          descripcion,
-          estado,
-          calles ( id, nombre, latitud, longitud ),
-          categorias_incidente ( nombre )
-        `,
-        )
-        .eq("activo", true);
+      const datos = await incidentesService.obtenerParaFeed();
+      const lista = Array.isArray(datos) ? datos : [];
+      setIncidentes(lista);
 
-      if (error) throw error;
-
-      const formateados = (data || []).map((item) => ({
-        id: item.id,
-        titulo: item.titulo,
-        calle: item.calles?.nombre || "Vía de Cala Cala",
-        lat: item.calles?.latitud || CALA_CALA_LAT,
-        lng: item.calles?.longitud || CALA_CALA_LNG,
-        categoria: item.categorias_incidente?.nombre || "Incidente",
-      }));
-
-      setIncidentes(formateados);
+      if (lista.length > 0) {
+        setIncidenteActivo((prev) => {
+          if (!prev) return lista[0];
+          const existe = lista.find((item) => item.id === prev.id);
+          return existe || lista[0];
+        });
+      }
     } catch (err) {
-      console.error("Error al cargar incidentes para el mapa:", err.message);
+      console.error(
+        "Error al cargar incidentes para Google Maps:",
+        err.message,
+      );
     } finally {
       setCargando(false);
     }
   }
 
-  const generarMapaHTML = () => {
-    const marcadoresJS = incidentes
-      .map(
-        (inc) => `
-        L.marker([${inc.lat}, ${inc.lng}])
-          .addTo(map)
-          .bindPopup('<b>${inc.calle}</b><br/>${inc.titulo}<br/><br/><button style="background:#0284C7;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-weight:bold;width:100%;" onclick="window.parent.postMessage({tipo:\\'SELECCIONAR_INCIDENTE\\', id:\\'${inc.id}\\'}, \\'*\\')">Ver en Lista</button>');
-      `,
-      )
-      .join("\n");
+  const obtenerUrlGoogleMapsEmbed = () => {
+    if (!incidenteActivo) {
+      return "https://maps.google.com/maps?q=Plaza+Cala+Cala,+Cochabamba&hl=es&z=16&output=embed";
+    }
 
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8" />
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-          <style>
-            html, body, #map { width: 100%; height: 100%; margin: 0; padding: 0; background: #E2E8F0; }
-            .leaflet-control-attribution { font-size: 9px; }
-          </style>
-        </head>
-        <body>
-          <div id="map"></div>
-          <script>
-            var map = L.map('map', {
-              center: [${CALA_CALA_LAT}, ${CALA_CALA_LNG}],
-              zoom: 15,
-              minZoom: 13,
-              maxZoom: 18
-            });
+    const query = encodeURIComponent(
+      `${incidenteActivo.calle_nombre}, Cala Cala, Cochabamba`,
+    );
+    return `https://maps.google.com/maps?q=${query}&hl=es&z=17&output=embed`;
+  };
 
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-              attribution: '© OpenStreetMap Cochabamba'
-            }).addTo(map);
+  const abrirEnGoogleMapsApp = () => {
+    if (!incidenteActivo) return;
 
-            ${marcadoresJS}
-          </script>
-        </body>
-      </html>
-    `;
+    if (incidenteActivo.maps_url) {
+      Linking.openURL(incidenteActivo.maps_url);
+      return;
+    }
+
+    const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      `${incidenteActivo.calle_nombre}, Cala Cala, Cochabamba`,
+    )}`;
+    Linking.openURL(fallbackUrl);
   };
 
   return (
     <View style={styles.container}>
+      {/* Cabecera Compacta */}
       <View style={styles.header}>
         <View style={styles.headerBadge}>
           <MapPin size={12} color={COLORS.primary} strokeWidth={2.4} />
           <Text style={styles.headerSub}>CALA CALA · DISTRITO 12</Text>
         </View>
-        <Text style={styles.headerTitle}>Mapa Interactivo</Text>
-        <Text style={styles.headerHint}>
-          Puntos georreferenciados para atención territorial
-        </Text>
+        <Text style={styles.headerTitle}>Mapa Territorial</Text>
       </View>
 
+      {/* Contenedor del Mapa a Pantalla Completa */}
       <View style={styles.mapContainer}>
         {cargando ? (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>
-              Cargando cartografía urbana...
+              Conectando con Google Maps...
             </Text>
           </View>
-        ) : Platform.OS === "web" ? (
-          <iframe
-            srcDoc={generarMapaHTML()}
-            style={{ width: "100%", height: "100%", border: "none" }}
-            title="Mapa de Cala Cala"
-          />
         ) : (
-          <ScrollView contentContainerStyle={styles.mobileFallbackContent}>
-            <View style={styles.fallbackCard}>
-              <Navigation size={28} color={COLORS.primary} />
-              <Text style={styles.fallbackTitle}>Vista Territorial Activa</Text>
-              <Text style={styles.fallbackDesc}>
-                {incidentes.length} reportes georreferenciados en Cala Cala.
-              </Text>
-            </View>
+          <iframe
+            key={incidenteActivo?.id || "default-map"}
+            src={obtenerUrlGoogleMapsEmbed()}
+            style={styles.iframe}
+            title="Google Maps Cala Cala"
+            loading="lazy"
+          />
+        )}
 
-            {incidentes.map((inc) => (
+        {/* Mini Acordeón Flotante Inferior */}
+        {incidenteActivo && (
+          <View style={styles.floatingAccordionContainer}>
+            {/* Cabecera del acordeón: Muestra el reporte actual y permite desplegar */}
+            <TouchableOpacity
+              style={styles.accordionHeader}
+              activeOpacity={0.8}
+              onPress={() => setMenuAbierto((prev) => !prev)}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={styles.headerIndicatorRow}>
+                  <Text style={styles.badgeNumero}>
+                    REPORTE EN VISTA (
+                    {incidentes.findIndex((i) => i.id === incidenteActivo.id) +
+                      1}
+                    /{incidentes.length})
+                  </Text>
+                  <Text style={styles.toggleHintText}>
+                    {menuAbierto
+                      ? "Toca para cerrar lista"
+                      : "Toca para ver todos"}
+                  </Text>
+                </View>
+                <Text style={styles.headerCalle} numberOfLines={1}>
+                  {incidenteActivo.calle_nombre}
+                </Text>
+                <Text style={styles.headerTitulo} numberOfLines={1}>
+                  {incidenteActivo.titulo}
+                </Text>
+              </View>
+
+              <View style={styles.iconDropdownWrap}>
+                {menuAbierto ? (
+                  <ChevronDown
+                    size={18}
+                    color={COLORS.primary}
+                    strokeWidth={2.5}
+                  />
+                ) : (
+                  <ChevronUp
+                    size={18}
+                    color={COLORS.primary}
+                    strokeWidth={2.5}
+                  />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Lista Desplegable con Scroll Vertical */}
+            {menuAbierto && (
+              <View style={styles.accordionBody}>
+                <ScrollView
+                  style={styles.scrollList}
+                  nestedScrollEnabled={true}
+                  showsVerticalScrollIndicator={true}
+                >
+                  {incidentes.map((inc, idx) => {
+                    const esSeleccionado = inc.id === incidenteActivo.id;
+                    return (
+                      <TouchableOpacity
+                        key={inc.id}
+                        style={[
+                          styles.listItem,
+                          esSeleccionado && styles.listItemActive,
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setIncidenteActivo(inc);
+                          setMenuAbierto(false);
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <View style={styles.listItemTop}>
+                            <Text
+                              style={[
+                                styles.listItemCalle,
+                                esSeleccionado && styles.listItemCalleActive,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {idx + 1}. {inc.calle_nombre}
+                            </Text>
+                            {esSeleccionado && (
+                              <View style={styles.chipActivo}>
+                                <Check
+                                  size={10}
+                                  color="#FFFFFF"
+                                  strokeWidth={2.5}
+                                />
+                                <Text style={styles.chipActivoText}>
+                                  En Mapa
+                                </Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text
+                            style={[
+                              styles.listItemTitulo,
+                              esSeleccionado && styles.listItemTituloActive,
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {inc.titulo}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Barra de Acciones Directas */}
+            <View style={styles.cardActionsRow}>
               <TouchableOpacity
-                key={inc.id}
-                style={styles.incidentePinItem}
-                activeOpacity={0.7}
+                style={styles.btnAppMaps}
+                activeOpacity={0.8}
+                onPress={abrirEnGoogleMapsApp}
+              >
+                <Navigation size={12} color="#FFFFFF" strokeWidth={2.4} />
+                <Text style={styles.btnAppMapsText}>Abrir en Google Maps</Text>
+                <ExternalLink size={11} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.btnDetalleLista}
+                activeOpacity={0.75}
                 onPress={() =>
                   navigation.navigate("Incidentes", {
-                    incidenteIdSeleccionado: inc.id,
+                    incidenteIdSeleccionado: incidenteActivo.id,
                   })
                 }
               >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.pinCalle}>{inc.calle}</Text>
-                  <Text style={styles.pinTitulo}>{inc.titulo}</Text>
-                </View>
-                <ExternalLink size={14} color={COLORS.primary} />
+                <List size={13} color={COLORS.primaryDark} strokeWidth={2.2} />
+                <Text style={styles.btnDetalleListaText}>Ver detalle</Text>
+                <ChevronRight size={12} color={COLORS.primaryDark} />
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+            </View>
+          </View>
         )}
-
-        <View style={styles.footerBadge}>
-          <Info size={13} color={COLORS.textDark} />
-          <Text style={styles.footerText}>
-            {incidentes.length} puntos georreferenciados
-          </Text>
-        </View>
       </View>
     </View>
   );
@@ -196,8 +275,8 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: COLORS.surface,
     paddingHorizontal: SPACING.lg,
-    paddingTop: 50,
-    paddingBottom: SPACING.sm,
+    paddingTop: 48,
+    paddingBottom: SPACING.xs,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
@@ -205,76 +284,207 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginBottom: 2,
   },
   headerSub: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: "800",
     color: COLORS.primary,
     letterSpacing: 0.8,
   },
-  headerTitle: { fontSize: 22, fontWeight: "800", color: COLORS.textDark },
-  headerHint: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
-  mapContainer: { flex: 1, position: "relative" },
-  centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
-  footerBadge: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    zIndex: 999,
-  },
-  footerText: { fontSize: 11, fontWeight: "700", color: COLORS.textDark },
-  mobileFallbackContent: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.bottomInset,
-  },
-  fallbackCard: {
-    backgroundColor: COLORS.surface,
-    padding: SPACING.lg,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  fallbackTitle: {
-    fontSize: 15,
+  headerTitle: {
+    fontSize: 18,
     fontWeight: "800",
     color: COLORS.textDark,
-    marginTop: 6,
   },
-  fallbackDesc: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
-  incidentePinItem: {
-    backgroundColor: COLORS.surface,
-    padding: SPACING.md,
-    borderRadius: RADIUS.sm,
+
+  mapContainer: {
+    flex: 1,
+    position: "relative",
+    backgroundColor: "#E2E8F0",
+  },
+  iframe: {
+    width: "100%",
+    height: "100%",
+    border: "none",
+  },
+  centerBox: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 12,
+    color: COLORS.textMuted,
+    fontWeight: "600",
+  },
+
+  /* Mini Acordeón Flotante */
+  floatingAccordionContainer: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    elevation: 8,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.16,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    overflow: "hidden",
+  },
+  accordionHeader: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    paddingTop: 9,
+    paddingBottom: 7,
   },
-  pinCalle: {
-    fontSize: 10,
+  headerIndicatorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 2,
+    paddingRight: 6,
+  },
+  badgeNumero: {
+    fontSize: 9,
     fontWeight: "800",
     color: COLORS.primary,
+    letterSpacing: 0.5,
+  },
+  toggleHintText: {
+    fontSize: 9,
+    fontWeight: "600",
+    color: COLORS.textMuted,
+  },
+  headerCalle: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.textDark,
     textTransform: "uppercase",
   },
-  pinTitulo: {
-    fontSize: 13,
+  headerTitulo: {
+    fontSize: 12,
     fontWeight: "700",
     color: COLORS.textDark,
-    marginTop: 2,
+    marginTop: 1,
+  },
+  iconDropdownWrap: {
+    backgroundColor: "#F1F5F9",
+    padding: 6,
+    borderRadius: RADIUS.sm,
+    marginLeft: 8,
+  },
+
+  /* Scroll list interna del acordeón */
+  accordionBody: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderLight,
+    backgroundColor: "#F8FAFC",
+  },
+  scrollList: {
+    maxHeight: 160, // Limita la altura para no tapar todo el mapa
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  listItem: {
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.sm,
+    marginBottom: 4,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+  },
+  listItemActive: {
+    backgroundColor: "#EFF6FF",
+    borderColor: COLORS.primary,
+  },
+  listItemTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  listItemCalle: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.textMuted,
+    textTransform: "uppercase",
+    flex: 1,
+  },
+  listItemCalleActive: {
+    color: COLORS.primary,
+  },
+  listItemTitulo: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: COLORS.textDark,
+    marginTop: 1,
+  },
+  listItemTituloActive: {
+    fontWeight: "800",
+    color: COLORS.primaryDark,
+  },
+  chipActivo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 3,
+  },
+  chipActivoText: {
+    fontSize: 8,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+
+  /* Barra de acciones inferior */
+  cardActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "#FFFFFF",
+    gap: 8,
+  },
+  btnAppMaps: {
+    flex: 1.2,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: "#0F172A",
+    paddingVertical: 7,
+    borderRadius: RADIUS.sm,
+  },
+  btnAppMapsText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+  },
+  btnDetalleLista: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: COLORS.primaryLight,
+    paddingVertical: 7,
+    borderRadius: RADIUS.sm,
+  },
+  btnDetalleListaText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.primaryDark,
   },
 });

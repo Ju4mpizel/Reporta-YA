@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Modal,
+  Linking, // <-- Permite al admin verificar la ubicación del reporte en Google Maps
 } from "react-native";
 import {
   ArrowLeft,
@@ -22,8 +23,11 @@ import {
   ChevronUp,
   Check,
   CheckCircle2,
+  MapPin,
+  ExternalLink,
 } from "lucide-react-native";
 import { supabase } from "../services/supabase";
+import { incidentesService } from "../services/incidentesService";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 const ESTADOS_DISPONIBLES = [
@@ -82,17 +86,11 @@ export default function GestionIncidenteScreen({ route, navigation }) {
     try {
       setGuardando(true);
 
-      const { error } = await supabase
-        .from("incidentes")
-        .update({
-          departamento_id: deptoSeleccionado,
-          estado: estadoSeleccionado,
-          nota_alcaldia: notaMunicipal.trim(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", incidente.id);
-
-      if (error) throw error;
+      await incidentesService.dictaminar(incidente.id, {
+        departamentoId: deptoSeleccionado,
+        estado: estadoSeleccionado,
+        notaAlcaldia: notaMunicipal,
+      });
 
       setModalExitoVisible(true);
     } catch (err) {
@@ -119,7 +117,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
 
   return (
     <View style={styles.screenWrapper}>
-      {/* Header Institucional Oscuro Coherente */}
+      {/* Header Institucional Oscuro */}
       <View style={styles.headerDark}>
         <TouchableOpacity
           style={styles.btnBack}
@@ -158,6 +156,21 @@ export default function GestionIncidenteScreen({ route, navigation }) {
                 {incidente.total_apoyos} respaldos
               </Text>
             </View>
+
+            {/* Enlace para que el administrador valide la calle en Google Maps */}
+            {incidente.maps_url ? (
+              <TouchableOpacity
+                style={styles.btnAdminMaps}
+                activeOpacity={0.7}
+                onPress={() => Linking.openURL(incidente.maps_url)}
+              >
+                <MapPin size={11} color="#0284C7" strokeWidth={2.2} />
+                <Text style={styles.btnAdminMapsText}>
+                  Ver punto en Google Maps
+                </Text>
+                <ExternalLink size={10} color="#0284C7" />
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
 
@@ -479,6 +492,24 @@ const styles = StyleSheet.create({
   },
   infoLineText: { fontSize: 10, color: COLORS.textMuted },
   infoLineVotes: { fontSize: 10, fontWeight: "700", color: COLORS.primary },
+  btnAdminMaps: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 5,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: RADIUS.sm,
+    alignSelf: "flex-start",
+  },
+  btnAdminMapsText: {
+    fontSize: 9,
+    fontWeight: "800",
+    color: "#0284C7",
+  },
 
   accordionContainer: {
     borderWidth: 1,

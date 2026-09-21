@@ -10,7 +10,7 @@ export const AuthProvider = ({ children }) => {
   const [perfil, setPerfil] = useState(null);
   const [cargando, setCargando] = useState(true);
 
-  // Restaurar sesión guardada al abrir la aplicación
+  // Restaurar sesión persistida al abrir la app
   useEffect(() => {
     restaurarSesion();
   }, []);
@@ -34,7 +34,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const { data, error } = await supabase
         .from("perfiles")
-        .select("*, roles(id, nombre, codigo)")
+        .select("*, roles(nombre)")
         .eq("ci", ci.trim())
         .eq("password", password.trim())
         .maybeSingle();
@@ -57,7 +57,6 @@ export const AuthProvider = ({ children }) => {
   const registrar = async ({ ci, nombreCompleto, telefono, password }) => {
     setCargando(true);
     try {
-      // 1 representa el rol ciudadano por defecto
       const { data, error } = await supabase
         .from("perfiles")
         .insert([
@@ -66,11 +65,11 @@ export const AuthProvider = ({ children }) => {
             nombre_completo: nombreCompleto.trim(),
             telefono: telefono.trim(),
             password: password.trim(),
-            rol_id: 1,
+            rol_id: "ciudadano",
             activo: true,
           },
         ])
-        .select("*, roles(id, nombre, codigo)")
+        .select("*, roles(nombre)")
         .single();
 
       if (error) {
@@ -96,13 +95,6 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // Evaluación flexible de admin (por código 'admin', nombre o rol_id 2)
-  const esAdmin =
-    perfil?.roles?.codigo === "admin" ||
-    perfil?.roles?.nombre?.toLowerCase() === "administrador" ||
-    perfil?.rol_id === 2 ||
-    perfil?.rol_id === "admin";
-
   return (
     <AuthContext.Provider
       value={{
@@ -112,7 +104,7 @@ export const AuthProvider = ({ children }) => {
         registrar,
         logout,
         estaAutenticado: !!perfil,
-        esAdmin,
+        esAdmin: perfil?.rol_id === "admin",
       }}
     >
       {children}
