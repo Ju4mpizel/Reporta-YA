@@ -23,11 +23,14 @@ import { useFocusEffect } from "@react-navigation/native";
 import { incidentesService } from "../services/incidentesService";
 import { COLORS, SPACING, RADIUS } from "../constants/theme";
 
-export default function MapaScreen({ navigation }) {
+export default function MapaScreen({ route, navigation }) {
+  // <-- route agregado
   const [incidentes, setIncidentes] = useState([]);
   const [incidenteActivo, setIncidenteActivo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [menuAbierto, setMenuAbierto] = useState(false);
+
+  const incidenteIdParam = route?.params?.incidenteIdSeleccionado;
 
   useFocusEffect(
     useCallback(() => {
@@ -46,6 +49,18 @@ export default function MapaScreen({ navigation }) {
     };
   }, []);
 
+  // Sincroniza si venimos desde IncidenteScreen con un id específico
+  useEffect(() => {
+    if (incidenteIdParam && incidentes.length > 0) {
+      const objetivo = incidentes.find(
+        (i) => Number(i.id) === Number(incidenteIdParam),
+      );
+      if (objetivo) {
+        setIncidenteActivo(objetivo);
+      }
+    }
+  }, [incidenteIdParam, incidentes]);
+
   async function cargarIncidentes() {
     try {
       setCargando(true);
@@ -55,6 +70,12 @@ export default function MapaScreen({ navigation }) {
 
       if (lista.length > 0) {
         setIncidenteActivo((prev) => {
+          if (incidenteIdParam) {
+            const desdeRuta = lista.find(
+              (i) => Number(i.id) === Number(incidenteIdParam),
+            );
+            if (desdeRuta) return desdeRuta;
+          }
           if (!prev) return lista[0];
           const existe = lista.find((item) => item.id === prev.id);
           return existe || lista[0];
@@ -128,7 +149,6 @@ export default function MapaScreen({ navigation }) {
         {/* Mini Acordeón Flotante Inferior */}
         {incidenteActivo && (
           <View style={styles.floatingAccordionContainer}>
-            {/* Cabecera del acordeón: Muestra el reporte actual y permite desplegar */}
             <TouchableOpacity
               style={styles.accordionHeader}
               activeOpacity={0.8}
@@ -390,7 +410,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC",
   },
   scrollList: {
-    maxHeight: 160, // Limita la altura para no tapar todo el mapa
+    maxHeight: 160,
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
