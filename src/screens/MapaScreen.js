@@ -1,5 +1,5 @@
 // src/screens/MapaScreen.js
-import React, { useState, useCallback, useEffect, useRef } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   StyleSheet,
   Text,
@@ -7,30 +7,65 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   ScrollView,
+  TextInput,
+  Modal,
+  Alert,
   Linking,
-  Animated,
-  Platform,
 } from "react-native";
 import {
-  MapPin,
   Navigation,
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  List,
+  MapPin,
+  PlusCircle,
+  X,
   Check,
+  List,
   ChevronRight,
-  ShieldCheck,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { useAuth } from "../context/AuthContext";
 import { incidentesService } from "../services/incidentesService";
-import { COLORS, SPACING, RADIUS } from "../constants/theme";
+import { callesService } from "../services/callesService";
+import HeaderInstitucional from "../components/HeaderInstitucional";
+import { COLORS, RADIUS } from "../constants/theme";
+
+const LAT_DEFAULT = -17.3684722;
+const LNG_DEFAULT = -66.1638889;
 
 export default function MapaScreen({ route, navigation }) {
+  const { perfil } = useAuth();
+
+  // Detección precisa de rol basada en tu tabla perfiles / roles
+  const rolUser = (
+    perfil?.rol_id ||
+    perfil?.roles?.id ||
+    perfil?.roles?.nombre ||
+    perfil?.rol ||
+    ""
+  )
+    .toLowerCase()
+    .trim();
+
+  const esAdmin =
+    rolUser.includes("admin") ||
+    rolUser.includes("funcionario") ||
+    perfil?.es_admin === true;
+
   const [incidentes, setIncidentes] = useState([]);
   const [incidenteActivo, setIncidenteActivo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [menuAbierto, setMenuAbierto] = useState(false);
+
+  // Coordenada capturada por el admin
+  const [coordenadaMarcada, setCoordenadaMarcada] = useState(null);
+
+  // Modal para agregar nueva calle
+  const [modalVisible, setModalVisible] = useState(false);
+  const [nombreNuevaCalle, setNombreNuevaCalle] = useState("");
+  const [tipoNuevaCalle, setTipoNuevaCalle] = useState("avenida");
+  const [guardandoCalle, setGuardandoCalle] = useState(false);
 
   const incidenteIdParam = route?.params?.incidenteIdSeleccionado;
 
@@ -41,25 +76,42 @@ export default function MapaScreen({ route, navigation }) {
   );
 
   useEffect(() => {
+    const handleMensajeIframe = (event) => {
+      try {
+        const datos =
+          typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+        if (datos?.tipo === "PUNTO_SELECCIONADO" && esAdmin) {
+          setCoordenadaMarcada({
+            lat: Number(datos.lat.toFixed(7)),
+            lng: Number(datos.lng.toFixed(7)),
+          });
+        } else if (datos?.tipo === "INCIDENTE_CLICKEADO") {
+          const encontrado = incidentes.find(
+            (i) => Number(i.id) === Number(datos.id),
+          );
+          if (encontrado) setIncidenteActivo(encontrado);
+        }
+      } catch (e) {}
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("message", handleMensajeIframe);
+    }
+    return () => {
+      if (typeof window !== "undefined") {
+        window.removeEventListener("message", handleMensajeIframe);
+      }
+    };
+  }, [esAdmin, incidentes]);
+
+  useEffect(() => {
     const desuscribir = incidentesService.suscribirACambios(() => {
       cargarIncidentes();
     });
-
     return () => {
       if (desuscribir) desuscribir();
     };
   }, []);
-
-  useEffect(() => {
-    if (incidenteIdParam && incidentes.length > 0) {
-      const objetivo = incidentes.find(
-        (i) => Number(i.id) === Number(incidenteIdParam),
-      );
-      if (objetivo) {
-        setIncidenteActivo(objetivo);
-      }
-    }
-  }, [incidenteIdParam, incidentes]);
 
   async function cargarIncidentes() {
     try {
@@ -69,6 +121,7 @@ export default function MapaScreen({ route, navigation }) {
       setIncidentes(lista);
 
       if (lista.length > 0) {
+        const primero = lista[0];
         setIncidenteActivo((prev) => {
           if (incidenteIdParam) {
             const desdeRuta = lista.find(
@@ -76,77 +129,279 @@ export default function MapaScreen({ route, navigation }) {
             );
             if (desdeRuta) return desdeRuta;
           }
-          if (!prev) return lista[0];
-          const existe = lista.find((item) => item.id === prev.id);
-          return existe || lista[0];
+          return prev || primero;
         });
+
+        if (primero.lat && primero.lng && esAdmin) {
+          setCoordenadaMarcada({ lat: primero.lat, lng: primero.lng });
+        }
+      } else {
+        setIncidenteActivo(null);
       }
     } catch (err) {
-      console.error(
-        "Error al cargar incidentes para Google Maps:",
-        err.message,
-      );
+      console.error("Error al cargar incidentes para Leaflet:", err.message);
     } finally {
       setCargando(false);
     }
   }
 
-  const obtenerUrlGoogleMapsEmbed = () => {
-    if (!incidenteActivo) {
-      return "https://maps.google.com/maps?q=Plaza+Cala+Cala,+Cochabamba&hl=es&z=16&output=embed";
-    }
+  // Notificar al iframe que vuele hacia el incidente seleccionado
+  const enfocarIncidente = (inc) => {
+    setIncidenteActivo(inc);
+    setMenuAbierto(false);
 
-    const query = encodeURIComponent(
-      `${incidenteActivo.calle_nombre}, Cala Cala, Cochabamba`,
-    );
-    return `https://maps.google.com/maps?q=${query}&hl=es&z=17&output=embed`;
+    if (typeof window !== "undefined") {
+      const iframe = document.getElementById("visor-leaflet-mapa");
+      if (iframe && iframe.contentWindow) {
+        iframe.contentWindow.postMessage(
+          JSON.stringify({
+            tipo: "VOLAR_A_INCIDENTE",
+            id: inc.id,
+            lat: inc.lat,
+            lng: inc.lng,
+          }),
+          "*",
+        );
+      }
+    }
   };
 
-  const abrirEnGoogleMapsApp = () => {
-    if (!incidenteActivo) return;
-
-    if (incidenteActivo.maps_url) {
-      Linking.openURL(incidenteActivo.maps_url);
+  const handleGuardarCalle = async () => {
+    if (!nombreNuevaCalle.trim()) {
+      Alert.alert("Atención", "Ingresa el nombre de la vía.");
+      return;
+    }
+    if (!coordenadaMarcada) {
+      Alert.alert("Error", "Toca primero en el mapa para ubicar la vía.");
       return;
     }
 
-    const fallbackUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-      `${incidenteActivo.calle_nombre}, Cala Cala, Cochabamba`,
-    )}`;
-    Linking.openURL(fallbackUrl);
+    try {
+      setGuardandoCalle(true);
+      await callesService.crearCalle({
+        nombre: nombreNuevaCalle.trim(),
+        tipo: tipoNuevaCalle,
+        latitud: coordenadaMarcada.lat,
+        longitud: coordenadaMarcada.lng,
+      });
+
+      Alert.alert(
+        "Éxito",
+        `Calle "${nombreNuevaCalle}" registrada con precisión.`,
+      );
+      setModalVisible(false);
+      setNombreNuevaCalle("");
+      cargarIncidentes();
+    } catch (err) {
+      Alert.alert("Error", err.message || "No se pudo guardar la calle.");
+    } finally {
+      setGuardandoCalle(false);
+    }
+  };
+
+  const generarHtmlLeaflet = () => {
+    const latInicial =
+      Number(incidenteActivo?.lat) ||
+      Number(coordenadaMarcada?.lat) ||
+      LAT_DEFAULT;
+    const lngInicial =
+      Number(incidenteActivo?.lng) ||
+      Number(coordenadaMarcada?.lng) ||
+      LNG_DEFAULT;
+
+    // Convertir incidentes a JSON seguro para pintar los alfileres
+    const jsonIncidentes = JSON.stringify(
+      incidentes
+        .filter((i) => i.lat && i.lng)
+        .map((i) => ({
+          id: i.id,
+          lat: i.lat,
+          lng: i.lng,
+          titulo: i.titulo,
+          calle: i.calle_nombre,
+          estado: i.estado,
+        })),
+    );
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+          <style>
+            html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f1f5f9; }
+            .leaflet-popup-content-wrapper { border-radius: 8px; font-family: system-ui, sans-serif; }
+            
+            /* PIN ESTILO ALFILER CON CABEZA DE BOLITA ROJA (INCIDENTES) */
+            .pin-alfiler-wrapper {
+              position: relative;
+              width: 24px;
+              height: 36px;
+            }
+            .pin-bolita-roja {
+              width: 16px;
+              height: 16px;
+              background: radial-gradient(circle at 35% 35%, #EF4444, #991B1B);
+              border: 1.5px solid #FFFFFF;
+              border-radius: 50%;
+              box-shadow: 0 3px 6px rgba(0,0,0,0.35);
+              position: absolute;
+              top: 0;
+              left: 4px;
+              z-index: 2;
+            }
+            .pin-aguja-metalica {
+              width: 2.5px;
+              height: 20px;
+              background: linear-gradient(to right, #94A3B8, #475569);
+              position: absolute;
+              top: 15px;
+              left: 11px;
+              border-radius: 1px;
+              z-index: 1;
+            }
+            .pin-sombra-base {
+              width: 8px;
+              height: 4px;
+              background: rgba(0,0,0,0.3);
+              border-radius: 50%;
+              position: absolute;
+              bottom: 0;
+              left: 8px;
+            }
+
+            .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; }
+            .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; }
+          </style>
+        </head>
+        <body>
+          <div id="map"></div>
+          <script>
+            var esAdmin = ${esAdmin ? "true" : "false"};
+            var incidentes = ${jsonIncidentes};
+
+            var map = L.map('map', { zoomControl: false }).setView([${latInicial}, ${lngInicial}], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+
+            L.control.zoom({ position: 'topright' }).addTo(map);
+
+            // Icono personalizado tipo Alfiler con bolita roja para los incidentes
+            var iconoAlfilerRojo = L.divIcon({
+              className: 'alfiler-custom',
+              html: '<div class="pin-alfiler-wrapper"><div class="pin-bolita-roja"></div><div class="pin-aguja-metalica"></div><div class="pin-sombra-base"></div></div>',
+              iconSize: [24, 36],
+              iconAnchor: [12, 35],
+              popupAnchor: [0, -32]
+            });
+
+            // Diccionario para abrir popups al seleccionar desde React Native
+            var marcadoresIncidentes = {};
+
+            // Pintar todos los incidentes estáticos en el mapa
+            incidentes.forEach(function(inc) {
+              var m = L.marker([inc.lat, inc.lng], { icon: iconoAlfilerRojo }).addTo(map);
+              var popHtml = '<div class="pop-calle">🔴 ' + inc.calle + '</div><div class="pop-tit">' + inc.titulo + '</div>';
+              m.bindPopup(popHtml);
+
+              m.on('click', function() {
+                window.parent.postMessage(JSON.stringify({ tipo: 'INCIDENTE_CLICKEADO', id: inc.id }), '*');
+              });
+
+              marcadoresIncidentes[inc.id] = m;
+            });
+
+            // Marcador azul de calibración (SOLO ADMIN)
+            var markerAdmin = null;
+
+            if (esAdmin) {
+              markerAdmin = L.marker([${latInicial}, ${lngInicial}], { draggable: true }).addTo(map);
+
+              function notificar(lat, lng) {
+                window.parent.postMessage(JSON.stringify({ tipo: 'PUNTO_SELECCIONADO', lat: lat, lng: lng }), '*');
+              }
+
+              map.on('click', function(e) {
+                markerAdmin.setLatLng(e.latlng);
+                notificar(e.latlng.lat, e.latlng.lng);
+              });
+
+              markerAdmin.on('dragend', function(e) {
+                var pos = markerAdmin.getLatLng();
+                notificar(pos.lat, pos.lng);
+              });
+            }
+
+            // Escuchar peticiones desde React Native para volar hacia un incidente
+            window.addEventListener('message', function(event) {
+              try {
+                var d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                if (d.tipo === 'VOLAR_A_INCIDENTE') {
+                  map.flyTo([d.lat, d.lng], 17, { duration: 1.2 });
+                  if (marcadoresIncidentes[d.id]) {
+                    setTimeout(function() {
+                      marcadoresIncidentes[d.id].openPopup();
+                    }, 1200);
+                  }
+                }
+              } catch(e) {}
+            });
+          </script>
+        </body>
+      </html>
+    `;
   };
 
   return (
     <View style={styles.container}>
-      {/* Header Institucional Curvo Homologado */}
-      <View style={styles.headerDark}>
-        <View style={styles.headerTopLine}>
-          <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
-          <Text style={styles.headerSub}>SUBALCALDÍA CALA CALA · D-12</Text>
-        </View>
-        <Text style={styles.headerTitle}>Mapa Territorial</Text>
-      </View>
+      <HeaderInstitucional
+        titulo={esAdmin ? "Gestor Territorial (Admin)" : "Mapa Territorial"}
+      />
 
-      {/* Visor */}
       <View style={styles.mapContainer}>
         {cargando ? (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={COLORS.primary} />
-            <Text style={styles.loadingText}>
-              Conectando con Google Maps...
-            </Text>
+            <Text style={styles.loadingText}>Conectando con mapa...</Text>
           </View>
         ) : (
           <iframe
-            key={incidenteActivo?.id || "default-map"}
-            src={obtenerUrlGoogleMapsEmbed()}
+            id="visor-leaflet-mapa"
+            key={`mapa-${esAdmin ? "admin" : "ciudadano"}`}
+            srcDoc={generarHtmlLeaflet()}
             style={styles.iframe}
-            title="Google Maps Cala Cala"
-            loading="lazy"
+            title="Gestor Territorial"
           />
         )}
 
-        {/* Mini Acordeón Flotante Inferior */}
+        {/* Panel Superior: Exclusivo del Administrador */}
+        {esAdmin && coordenadaMarcada && (
+          <View style={styles.floatingCoordBox}>
+            <View style={styles.coordRow}>
+              <MapPin size={18} color={COLORS.primary} strokeWidth={2.5} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.coordLabel}>
+                  Punto Seleccionado (Toca el mapa para moverlo):
+                </Text>
+                <Text style={styles.coordValue}>
+                  {coordenadaMarcada.lat}, {coordenadaMarcada.lng}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.btnCrearCalle}
+                activeOpacity={0.8}
+                onPress={() => setModalVisible(true)}
+              >
+                <PlusCircle size={14} color="#FFFFFF" />
+                <Text style={styles.btnCrearCalleText}>+ Añadir Calle</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Mini Acordeón Inferior */}
         {incidenteActivo && (
           <View style={styles.floatingAccordionContainer}>
             <TouchableOpacity
@@ -155,19 +410,6 @@ export default function MapaScreen({ route, navigation }) {
               onPress={() => setMenuAbierto((prev) => !prev)}
             >
               <View style={{ flex: 1 }}>
-                <View style={styles.headerIndicatorRow}>
-                  <Text style={styles.badgeNumero}>
-                    REPORTE EN VISTA (
-                    {incidentes.findIndex((i) => i.id === incidenteActivo.id) +
-                      1}
-                    /{incidentes.length})
-                  </Text>
-                  <Text style={styles.toggleHintText}>
-                    {menuAbierto
-                      ? "Toca para cerrar lista"
-                      : "Toca para ver todos"}
-                  </Text>
-                </View>
                 <Text style={styles.headerCalle} numberOfLines={1}>
                   {incidenteActivo.calle_nombre}
                 </Text>
@@ -175,31 +417,16 @@ export default function MapaScreen({ route, navigation }) {
                   {incidenteActivo.titulo}
                 </Text>
               </View>
-
-              <View style={styles.iconDropdownWrap}>
-                {menuAbierto ? (
-                  <ChevronDown
-                    size={18}
-                    color={COLORS.primary}
-                    strokeWidth={2.5}
-                  />
-                ) : (
-                  <ChevronUp
-                    size={18}
-                    color={COLORS.primary}
-                    strokeWidth={2.5}
-                  />
-                )}
-              </View>
+              {menuAbierto ? (
+                <ChevronDown size={18} color={COLORS.primary} />
+              ) : (
+                <ChevronUp size={18} color={COLORS.primary} />
+              )}
             </TouchableOpacity>
 
             {menuAbierto && (
               <View style={styles.accordionBody}>
-                <ScrollView
-                  style={styles.scrollList}
-                  nestedScrollEnabled={true}
-                  showsVerticalScrollIndicator={true}
-                >
+                <ScrollView style={{ maxHeight: 150, padding: 8 }}>
                   {incidentes.map((inc, idx) => {
                     const esSeleccionado = inc.id === incidenteActivo.id;
                     return (
@@ -209,46 +436,26 @@ export default function MapaScreen({ route, navigation }) {
                           styles.listItem,
                           esSeleccionado && styles.listItemActive,
                         ]}
-                        activeOpacity={0.7}
-                        onPress={() => {
-                          setIncidenteActivo(inc);
-                          setMenuAbierto(false);
-                        }}
+                        onPress={() => enfocarIncidente(inc)}
                       >
                         <View style={{ flex: 1 }}>
-                          <View style={styles.listItemTop}>
-                            <Text
-                              style={[
-                                styles.listItemCalle,
-                                esSeleccionado && styles.listItemCalleActive,
-                              ]}
-                              numberOfLines={1}
-                            >
-                              {idx + 1}. {inc.calle_nombre}
-                            </Text>
-                            {esSeleccionado && (
-                              <View style={styles.chipActivo}>
-                                <Check
-                                  size={10}
-                                  color="#FFFFFF"
-                                  strokeWidth={2.5}
-                                />
-                                <Text style={styles.chipActivoText}>
-                                  En Mapa
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          <Text
-                            style={[
-                              styles.listItemTitulo,
-                              esSeleccionado && styles.listItemTituloActive,
-                            ]}
-                            numberOfLines={1}
-                          >
+                          <Text style={styles.listItemCalle}>
+                            {idx + 1}. {inc.calle_nombre}
+                          </Text>
+                          <Text style={styles.listItemTitulo} numberOfLines={1}>
                             {inc.titulo}
                           </Text>
                         </View>
+                        {esSeleccionado && (
+                          <View style={styles.chipActivo}>
+                            <Check
+                              size={10}
+                              color="#FFFFFF"
+                              strokeWidth={2.5}
+                            />
+                            <Text style={styles.chipActivoText}>En Foco</Text>
+                          </View>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -256,12 +463,22 @@ export default function MapaScreen({ route, navigation }) {
               </View>
             )}
 
-            {/* Barra de Acciones */}
+            {/* Barra de Acciones: Abrir en Google Maps + Ver Detalle */}
             <View style={styles.cardActionsRow}>
               <TouchableOpacity
                 style={styles.btnAppMaps}
                 activeOpacity={0.8}
-                onPress={abrirEnGoogleMapsApp}
+                onPress={() => {
+                  if (incidenteActivo?.maps_url) {
+                    Linking.openURL(incidenteActivo.maps_url);
+                    return;
+                  }
+                  const lat = incidenteActivo?.lat || LAT_DEFAULT;
+                  const lng = incidenteActivo?.lng || LNG_DEFAULT;
+                  Linking.openURL(
+                    `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+                  );
+                }}
               >
                 <Navigation size={12} color="#FFFFFF" strokeWidth={2.4} />
                 <Text style={styles.btnAppMapsText}>Abrir en Google Maps</Text>
@@ -277,67 +494,138 @@ export default function MapaScreen({ route, navigation }) {
                   })
                 }
               >
-                <List size={13} color={COLORS.primaryDark} strokeWidth={2.2} />
+                <List
+                  size={13}
+                  color={COLORS.primaryDark || "#1E40AF"}
+                  strokeWidth={2.2}
+                />
                 <Text style={styles.btnDetalleListaText}>Ver detalle</Text>
-                <ChevronRight size={12} color={COLORS.primaryDark} />
+                <ChevronRight
+                  size={12}
+                  color={COLORS.primaryDark || "#1E40AF"}
+                />
               </TouchableOpacity>
             </View>
           </View>
         )}
       </View>
+
+      {/* Modal para Guardar Calle: SOLO PARA ADMIN */}
+      {esAdmin && (
+        <Modal visible={modalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  Registrar Nueva Calle / Avenida
+                </Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <X size={20} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.modalLabel}>
+                Coordenadas exactas marcadas:
+              </Text>
+              <View style={styles.modalCoordBox}>
+                <Text style={styles.modalCoordText}>
+                  {coordenadaMarcada?.lat}, {coordenadaMarcada?.lng}
+                </Text>
+              </View>
+
+              <Text style={styles.modalLabel}>Nombre oficial de la vía:</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ej: Av. América (esq. Adela Zamudio)"
+                value={nombreNuevaCalle}
+                onChangeText={setNombreNuevaCalle}
+                placeholderTextColor="#94A3B8"
+              />
+
+              <Text style={styles.modalLabel}>Tipo de vía:</Text>
+              <View style={styles.tipoRow}>
+                {["avenida", "calle", "pasaje", "plaza"].map((tipo) => (
+                  <TouchableOpacity
+                    key={tipo}
+                    style={[
+                      styles.tipoBtn,
+                      tipoNuevaCalle === tipo && styles.tipoBtnActive,
+                    ]}
+                    onPress={() => setTipoNuevaCalle(tipo)}
+                  >
+                    <Text
+                      style={[
+                        styles.tipoBtnText,
+                        tipoNuevaCalle === tipo && styles.tipoBtnTextActive,
+                      ]}
+                    >
+                      {tipo.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity
+                style={styles.btnGuardarFinal}
+                activeOpacity={0.8}
+                onPress={handleGuardarCalle}
+                disabled={guardandoCalle}
+              >
+                {guardandoCalle ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.btnGuardarFinalText}>
+                    Guardar Vía en Base de Datos
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  headerDark: {
-    backgroundColor: "#0F172A",
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 52,
-    paddingBottom: SPACING.md,
-    borderBottomLeftRadius: RADIUS.lg,
-    borderBottomRightRadius: RADIUS.lg,
-    elevation: 3,
+  mapContainer: { flex: 1, position: "relative" },
+  iframe: { width: "100%", height: "100%", border: "none" },
+  centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
+  loadingText: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
+
+  floatingCoordBox: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    right: 12,
+    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.primaryLight,
+    padding: 10,
+    elevation: 6,
+    zIndex: 10,
   },
-  headerTopLine: {
+  coordRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  coordLabel: { fontSize: 10, fontWeight: "700", color: COLORS.textMuted },
+  coordValue: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.textDark,
+    fontFamily: "monospace",
+  },
+  btnCrearCalle: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
+    gap: 5,
+    backgroundColor: "#16A34A",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: RADIUS.sm,
   },
-  headerSub: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#38BDF8",
-    letterSpacing: 1,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
-  mapContainer: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: "#E2E8F0",
-  },
-  iframe: {
-    width: "100%",
-    height: "100%",
-    border: "none",
-  },
-  centerBox: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 8,
-    fontSize: 12,
-    color: COLORS.textMuted,
-    fontWeight: "600",
-  },
+  btnCrearCalleText: { fontSize: 11, fontWeight: "800", color: "#FFFFFF" },
+
   floatingAccordionContainer: {
     position: "absolute",
     bottom: 12,
@@ -348,117 +636,50 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     elevation: 8,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.16,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
     overflow: "hidden",
+    zIndex: 10,
   },
-  accordionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 12,
-    paddingTop: 9,
-    paddingBottom: 7,
-  },
-  headerIndicatorRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 2,
-    paddingRight: 6,
-  },
-  badgeNumero: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: COLORS.primary,
-    letterSpacing: 0.5,
-  },
-  toggleHintText: {
-    fontSize: 9,
-    fontWeight: "600",
-    color: COLORS.textMuted,
-  },
+  accordionHeader: { flexDirection: "row", alignItems: "center", padding: 12 },
   headerCalle: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "800",
     color: COLORS.textDark,
     textTransform: "uppercase",
   },
-  headerTitulo: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textDark,
-    marginTop: 1,
-  },
-  iconDropdownWrap: {
-    backgroundColor: "#F1F5F9",
-    padding: 6,
-    borderRadius: RADIUS.sm,
-    marginLeft: 8,
-  },
+  headerTitulo: { fontSize: 13, fontWeight: "700", color: COLORS.textDark },
   accordionBody: {
     borderTopWidth: 1,
     borderTopColor: COLORS.borderLight,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
     backgroundColor: "#F8FAFC",
   },
-  scrollList: {
-    maxHeight: 160,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
   listItem: {
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRadius: RADIUS.sm,
-    marginBottom: 4,
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  listItemActive: {
-    backgroundColor: "#EFF6FF",
-    borderColor: COLORS.primary,
-  },
-  listItemTop: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    padding: 8,
+    borderRadius: RADIUS.sm,
+    marginBottom: 4,
+    backgroundColor: "#FFFFFF",
   },
+  listItemActive: { backgroundColor: "#EFF6FF" },
   listItemCalle: {
     fontSize: 10,
     fontWeight: "800",
-    color: COLORS.textMuted,
-    textTransform: "uppercase",
-    flex: 1,
-  },
-  listItemCalleActive: {
     color: COLORS.primary,
+    textTransform: "uppercase",
   },
-  listItemTitulo: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: COLORS.textDark,
-    marginTop: 1,
-  },
-  listItemTituloActive: {
-    fontWeight: "800",
-    color: COLORS.primaryDark,
-  },
+  listItemTitulo: { fontSize: 12, fontWeight: "600", color: COLORS.textDark },
   chipActivo: {
     flexDirection: "row",
     alignItems: "center",
     gap: 3,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
   },
   chipActivoText: {
-    fontSize: 8,
+    fontSize: 9,
     fontWeight: "800",
     color: "#FFFFFF",
   },
@@ -479,7 +700,7 @@ const styles = StyleSheet.create({
     gap: 5,
     backgroundColor: "#0F172A",
     paddingVertical: 7,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.sm || 6,
   },
   btnAppMapsText: {
     color: "#FFFFFF",
@@ -492,13 +713,88 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 4,
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: COLORS.primaryLight || "#DBEAFE",
     paddingVertical: 7,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.sm || 6,
   },
   btnDetalleListaText: {
     fontSize: 10,
     fontWeight: "800",
-    color: COLORS.primaryDark,
+    color: COLORS.primaryDark || "#1E40AF",
   },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+    zIndex: 20,
+  },
+  modalContent: {
+    backgroundColor: "#FFFFFF",
+    width: "100%",
+    maxWidth: 440,
+    borderRadius: RADIUS.md,
+    padding: 20,
+    elevation: 10,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  modalTitle: { fontSize: 15, fontWeight: "800", color: COLORS.textDark },
+  modalLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textMuted,
+    marginTop: 10,
+    marginBottom: 4,
+    textTransform: "uppercase",
+  },
+  modalCoordBox: {
+    backgroundColor: "#F1F5F9",
+    padding: 8,
+    borderRadius: RADIUS.sm,
+  },
+  modalCoordText: {
+    fontFamily: "monospace",
+    fontSize: 12,
+    color: COLORS.primaryDark,
+    fontWeight: "700",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: COLORS.textDark,
+  },
+  tipoRow: { flexDirection: "row", gap: 6, marginVertical: 6 },
+  tipoBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.sm,
+    alignItems: "center",
+  },
+  tipoBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  tipoBtnText: { fontSize: 10, fontWeight: "800", color: COLORS.textMuted },
+  tipoBtnTextActive: { color: "#FFFFFF" },
+  btnGuardarFinal: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 10,
+    borderRadius: RADIUS.sm,
+    alignItems: "center",
+    marginTop: 16,
+  },
+  btnGuardarFinalText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
 });

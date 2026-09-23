@@ -21,12 +21,11 @@ import {
   AlertCircle,
   ShieldCheck,
   Award,
-  ChevronRight,
   Clock,
-  CheckCircle2,
 } from "lucide-react-native";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
+import HeaderInstitucional from "../components/HeaderInstitucional";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 export default function PerfilScreen() {
@@ -118,14 +117,7 @@ export default function PerfilScreen() {
 
   return (
     <View style={styles.screenWrapper}>
-      {/* Header Institucional Curvo */}
-      <View style={styles.headerDark}>
-        <View style={styles.headerTopLine}>
-          <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
-          <Text style={styles.headerSub}>SUBALCALDÍA CALA CALA · D-12</Text>
-        </View>
-        <Text style={styles.headerTitle}>Credencial Ciudadana</Text>
-      </View>
+      <HeaderInstitucional titulo="Credencial Ciudadana" />
 
       <ScrollView
         style={styles.container}
@@ -314,7 +306,7 @@ export default function PerfilScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* Modal / Bottom Sheet */}
+      {/* Modal Bottom Sheet */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -364,32 +356,6 @@ export default function PerfilScreen() {
 
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1, backgroundColor: COLORS.background },
-  headerDark: {
-    backgroundColor: "#0F172A",
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 52,
-    paddingBottom: SPACING.lg,
-    borderBottomLeftRadius: RADIUS.lg,
-    borderBottomRightRadius: RADIUS.lg,
-    elevation: 3,
-  },
-  headerTopLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
-  },
-  headerSub: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#38BDF8",
-    letterSpacing: 1,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
   container: { flex: 1 },
   content: {
     padding: SPACING.lg,
@@ -402,8 +368,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   loadingText: { marginTop: 10, fontSize: 12, color: COLORS.textMuted },
-
-  /* Tarjeta de Identidad */
   identityCard: {
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -488,8 +452,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#16A34A",
   },
   statusText: { color: "#15803D", fontSize: 9.5, fontWeight: "800" },
-
-  /* Métricas */
   statsContainer: {
     flexDirection: "row",
     gap: SPACING.sm,
@@ -521,8 +483,6 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textTransform: "uppercase",
   },
-
-  /* Card Info */
   infoCard: {
     backgroundColor: COLORS.surface,
     borderWidth: 1,
@@ -558,8 +518,6 @@ const styles = StyleSheet.create({
   },
   labelText: { fontSize: 11.5, fontWeight: "600", color: COLORS.textMuted },
   valueText: { fontSize: 12, fontWeight: "800", color: COLORS.textDark },
-
-  /* Historial */
   sectionHeader: {
     fontSize: 10,
     fontWeight: "800",
@@ -603,7 +561,6 @@ const styles = StyleSheet.create({
   },
   historyFooter: { flexDirection: "row", alignItems: "center", gap: 4 },
   historyDate: { fontSize: 10, color: COLORS.textSubtle },
-
   emptyCard: {
     padding: SPACING.lg,
     backgroundColor: COLORS.surface,
@@ -616,7 +573,6 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
   },
   emptyText: { fontSize: 11, color: COLORS.textMuted, fontWeight: "600" },
-
   btnLogout: {
     flexDirection: "row",
     justifyContent: "center",
@@ -637,8 +593,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-
-  /* Modal */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.6)",

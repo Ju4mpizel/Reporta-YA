@@ -11,6 +11,7 @@ import {
   Modal,
   Animated,
   Platform,
+  Image,
 } from "react-native";
 import {
   MapPin,
@@ -23,10 +24,16 @@ import {
   Send,
   Lock,
   CheckCircle2,
-  ShieldCheck,
+  Camera,
+  X,
+  WifiOff,
 } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
+import NetInfo from "@react-native-community/netinfo";
 import { supabase } from "../services/supabase";
-import { incidentesService } from "../services/incidentesService";
+import { CrearIncidenteCommand } from "../services/commands/CrearIncidenteCommand";
+import { commandQueueService } from "../services/CommandQueueService";
+import HeaderInstitucional from "../components/HeaderInstitucional";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
@@ -45,8 +52,12 @@ export default function NuevoIncidenteScreen({ navigation }) {
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState(null);
   const [titulo, setTitulo] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [imagenUri, setImagenUri] = useState(null);
   const [enviando, setEnviando] = useState(false);
+
+  // Estados dinámicos para el Modal de respuesta
   const [modalExitoVisible, setModalExitoVisible] = useState(false);
+  const [modalOffline, setModalOffline] = useState(false);
 
   const animFade = useRef(new Animated.Value(0)).current;
 
@@ -113,15 +124,40 @@ export default function NuevoIncidenteScreen({ navigation }) {
     setAcordeonAbierto((prev) => (prev === seccion ? null : seccion));
   };
 
+  const seleccionarImagen = async () => {
+    try {
+      const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permiso.granted) {
+        alert("Se requiere permiso para acceder a la galería.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setImagenUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.warn("Aviso selección de imagen:", error.message);
+    }
+  };
+
   const limpiarFormulario = () => {
     setZonaSeleccionada(null);
     setCalleSeleccionada(null);
     setCategoriaSeleccionada(null);
     setTitulo("");
     setDescripcion("");
+    setImagenUri(null);
     setAcordeonAbierto("zona");
   };
 
+  // --- IMPLEMENTACIÓN DEL PATRÓN COMMAND ---
   async function handleGuardar() {
     if (!zonaSeleccionada || !calleSeleccionada || !categoriaSeleccionada)
       return;
@@ -130,19 +166,37 @@ export default function NuevoIncidenteScreen({ navigation }) {
     try {
       setEnviando(true);
 
-      await incidentesService.crear({
+      // 1. Instanciamos el objeto Command encapsulando los datos del reporte
+      const comando = new CrearIncidenteCommand({
         usuarioId: perfil?.id,
         calleId: calleSeleccionada.id,
         categoriaId: categoriaSeleccionada.id,
         titulo: titulo.trim(),
         descripcion: descripcion.trim(),
         mapsUrl: calleSeleccionada.google_maps_url || null,
+        fotoLocalUri: imagenUri || null,
       });
+
+      // 2. Evaluamos la conectividad del dispositivo
+      const netState = await NetInfo.fetch();
+      const hayInternet = Boolean(
+        netState.isConnected && netState.isInternetReachable !== false,
+      );
+
+      if (hayInternet) {
+        // En línea: Ejecución directa del comando
+        await comando.execute();
+        setModalOffline(false);
+      } else {
+        // Sin conexión: Encolamos el comando para su ejecución posterior
+        await commandQueueService.encolar(comando);
+        setModalOffline(true);
+      }
 
       limpiarFormulario();
       setModalExitoVisible(true);
     } catch (err) {
-      console.error("Error al enviar reporte:", err.message);
+      console.error("Error al procesar el reporte:", err.message);
     } finally {
       setEnviando(false);
     }
@@ -168,14 +222,7 @@ export default function NuevoIncidenteScreen({ navigation }) {
 
   return (
     <View style={styles.screenWrapper}>
-      {/* Header Institucional Curvo Homologado */}
-      <View style={styles.headerDark}>
-        <View style={styles.headerTopLine}>
-          <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
-          <Text style={styles.headerSub}>SUBALCALDÍA CALA CALA · D-12</Text>
-        </View>
-        <Text style={styles.headerTitle}>Registrar Incidente</Text>
-      </View>
+      <HeaderInstitucional titulo="Registrar Incidente" />
 
       <ScrollView
         style={styles.container}
@@ -522,6 +569,49 @@ export default function NuevoIncidenteScreen({ navigation }) {
                 textAlignVertical="top"
               />
             </View>
+
+            {/* FOTOGRAFÍA EVIDENCIAL */}
+            <View style={styles.inputGroup}>
+              <Text
+                style={[
+                  styles.label,
+                  pasoDetallesBloqueado && styles.textDisabled,
+                ]}
+              >
+                Fotografía Evidencial (Opcional)
+              </Text>
+
+              {imagenUri ? (
+                <View style={styles.previewContainer}>
+                  <Image
+                    source={{ uri: imagenUri }}
+                    style={styles.previewImage}
+                  />
+                  <TouchableOpacity
+                    style={styles.btnRemoveImage}
+                    onPress={() => setImagenUri(null)}
+                    activeOpacity={0.8}
+                  >
+                    <X size={14} color="#FFFFFF" strokeWidth={2.5} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={[
+                    styles.btnSelectImage,
+                    pasoDetallesBloqueado && styles.inputDisabled,
+                  ]}
+                  onPress={seleccionarImagen}
+                  disabled={pasoDetallesBloqueado}
+                  activeOpacity={0.7}
+                >
+                  <Camera size={18} color={COLORS.primary} strokeWidth={2.2} />
+                  <Text style={styles.btnSelectImageText}>
+                    Adjuntar foto desde galería
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           <TouchableOpacity
@@ -534,7 +624,14 @@ export default function NuevoIncidenteScreen({ navigation }) {
             activeOpacity={0.8}
           >
             {enviando ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <View style={styles.btnContent}>
+                <ActivityIndicator color="#FFFFFF" size="small" />
+                <Text style={styles.btnSubmitText}>
+                  {imagenUri
+                    ? "Procesando evidencia..."
+                    : "Despachando reporte..."}
+                </Text>
+              </View>
             ) : (
               <View style={styles.btnContent}>
                 <Send size={15} color="#FFFFFF" strokeWidth={2.4} />
@@ -547,7 +644,7 @@ export default function NuevoIncidenteScreen({ navigation }) {
         </Animated.View>
       </ScrollView>
 
-      {/* Modal Bottom Sheet */}
+      {/* MODAL INSTITUCIONAL (EN LÍNEA O EN COLA OFFLINE) */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -562,21 +659,38 @@ export default function NuevoIncidenteScreen({ navigation }) {
           />
           <View style={styles.modalContent}>
             <View style={styles.modalDragHandle} />
-            <View style={styles.modalIconWrap}>
-              <CheckCircle2 size={32} color="#16A34A" strokeWidth={2.4} />
-            </View>
-            <Text style={styles.modalTitle}>¡Reporte Registrado!</Text>
+
+            {modalOffline ? (
+              <View style={styles.modalIconWrapAmber}>
+                <WifiOff size={30} color="#D97706" strokeWidth={2.4} />
+              </View>
+            ) : (
+              <View style={styles.modalIconWrapGreen}>
+                <CheckCircle2 size={32} color="#16A34A" strokeWidth={2.4} />
+              </View>
+            )}
+
+            <Text style={styles.modalTitle}>
+              {modalOffline
+                ? "Reporte Guardado en Cola"
+                : "¡Reporte Registrado!"}
+            </Text>
+
             <Text style={styles.modalDesc}>
-              Tu reporte ha sido ingresado al sistema distrital. Los vecinos y
-              la Subalcaldía podrán darle seguimiento.
+              {modalOffline
+                ? "Sin conexión a internet en este momento. Tu reporte fue almacenado localmente mediante Command y se enviará de forma automática al restablecerse la red."
+                : "Tu reporte fue transmitido exitosamente al servidor distrital. Los vecinos y la Subalcaldía podrán darle seguimiento."}
             </Text>
 
             <TouchableOpacity
-              style={styles.btnModalConfirm}
+              style={[
+                styles.btnModalConfirm,
+                modalOffline ? styles.btnModalAmber : styles.btnModalDark,
+              ]}
               activeOpacity={0.8}
               onPress={handleCerrarModal}
             >
-              <Text style={styles.btnModalConfirmText}>Ver en Lista</Text>
+              <Text style={styles.btnModalConfirmText}>Entendido</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -587,32 +701,6 @@ export default function NuevoIncidenteScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1, backgroundColor: COLORS.background },
-  headerDark: {
-    backgroundColor: "#0F172A",
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 52,
-    paddingBottom: SPACING.lg,
-    borderBottomLeftRadius: RADIUS.lg,
-    borderBottomRightRadius: RADIUS.lg,
-    elevation: 3,
-  },
-  headerTopLine: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
-  },
-  headerSub: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#38BDF8",
-    letterSpacing: 1,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#FFFFFF",
-  },
   container: { flex: 1 },
   content: {
     padding: SPACING.lg,
@@ -719,6 +807,48 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
   },
   textarea: { height: 85 },
+  btnSelectImage: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: "#BAE6FD",
+    borderRadius: RADIUS.md,
+    paddingVertical: 14,
+  },
+  btnSelectImageText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primaryDark,
+  },
+  previewContainer: {
+    position: "relative",
+    width: "100%",
+    height: 160,
+    borderRadius: RADIUS.md,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  previewImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  btnRemoveImage: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   btnSubmit: {
     backgroundColor: COLORS.primaryDark,
     paddingVertical: 14,
@@ -736,7 +866,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* Modal */
+  /* Modales */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(15, 23, 42, 0.6)",
@@ -758,11 +888,20 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginBottom: SPACING.md,
   },
-  modalIconWrap: {
+  modalIconWrapGreen: {
     width: 54,
     height: 54,
     borderRadius: 27,
     backgroundColor: "#DCFCE7",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: SPACING.sm,
+  },
+  modalIconWrapAmber: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: "#FEF3C7",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: SPACING.sm,
@@ -786,7 +925,12 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     borderRadius: RADIUS.sm,
     alignItems: "center",
+  },
+  btnModalDark: {
     backgroundColor: COLORS.primaryDark,
+  },
+  btnModalAmber: {
+    backgroundColor: "#D97706",
   },
   btnModalConfirmText: {
     fontSize: 12,

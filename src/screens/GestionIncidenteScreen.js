@@ -1,4 +1,3 @@
-// src/screens/GestionIncidenteScreen.js
 import React, { useEffect, useState, useRef } from "react";
 import {
   StyleSheet,
@@ -14,7 +13,6 @@ import {
   Platform,
 } from "react-native";
 import {
-  ArrowLeft,
   ShieldCheck,
   Building2,
   Clock,
@@ -30,6 +28,7 @@ import {
 } from "lucide-react-native";
 import { supabase } from "../services/supabase";
 import { incidentesService } from "../services/incidentesService";
+import HeaderInstitucional from "../components/HeaderInstitucional";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 const ESTADOS_DISPONIBLES = [
@@ -129,19 +128,12 @@ export default function GestionIncidenteScreen({ route, navigation }) {
 
   return (
     <View style={styles.screenWrapper}>
-      {/* Header Oscuro Institucional */}
-      <View style={styles.headerDark}>
-        <TouchableOpacity
-          style={styles.btnBack}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <ArrowLeft size={16} color="#38BDF8" strokeWidth={2.4} />
-          <Text style={styles.btnBackText}>Volver a la Bandeja</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerSub}>GESTIÓN OPERATIVA · DISTRITO 12</Text>
-        <Text style={styles.headerTitle}>Dictamen de Expediente</Text>
-      </View>
+      <HeaderInstitucional
+        titulo="Dictamen de Expediente"
+        subtitulo="GESTIÓN OPERATIVA · DISTRITO 12"
+        onBack={() => navigation.goBack()}
+        backText="Volver a la Bandeja"
+      />
 
       <ScrollView
         style={styles.container}
@@ -445,34 +437,6 @@ export default function GestionIncidenteScreen({ route, navigation }) {
 
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1, backgroundColor: COLORS.background },
-  headerDark: {
-    backgroundColor: "#0F172A",
-    paddingHorizontal: SPACING.lg,
-    paddingTop: 52,
-    paddingBottom: SPACING.md,
-    borderBottomLeftRadius: RADIUS.lg,
-    borderBottomRightRadius: RADIUS.lg,
-    elevation: 3,
-  },
-  btnBack: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    marginBottom: 6,
-  },
-  btnBackText: { fontSize: 12, fontWeight: "700", color: "#38BDF8" },
-  headerSub: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: "#38BDF8",
-    letterSpacing: 1,
-  },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "900",
-    color: "#FFFFFF",
-    marginTop: 2,
-  },
   container: { flex: 1 },
   content: { padding: SPACING.lg, paddingBottom: SPACING.bottomInset || 20 },
   summaryCard: {
