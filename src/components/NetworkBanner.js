@@ -1,118 +1,126 @@
 // src/components/NetworkBanner.js
-import React, { useEffect, useState, useRef } from "react";
-import { StyleSheet, Text, View, Animated, Platform } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { StyleSheet, Text, Animated, View } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { WifiOff, Wifi, CheckCircle2 } from "lucide-react-native";
 import { commandQueueService } from "../services/CommandQueueService";
 
 export default function NetworkBanner() {
-  const [estadoRed, setEstadoRed] = useState({
-    conectado: true,
-    mensaje: "",
-    tipo: "ok", // 'offline' | 'online' | 'sincronizado'
+  const [estadoBanner, setEstadoBanner] = useState({
+    tipo: "online", // "online" | "offline" | "sincronizado"
     visible: false,
+    mensaje: "",
   });
 
-  const animTranslateY = useRef(new Animated.Value(-60)).current;
-  const timeoutOcultar = useRef(null);
+  const estabaDesconectadoRef = useRef(false);
+  const esPrimeraEvaluacionRef = useRef(true);
+  const animY = useRef(new Animated.Value(-70)).current;
+  const timeoutOcultarRef = useRef(null);
 
-  const mostrarBanner = (tipo, mensaje, autoOcultar = true) => {
-    if (timeoutOcultar.current) clearTimeout(timeoutOcultar.current);
+  const mostrarAviso = (tipo, mensaje, autoOcultarSegundos = null) => {
+    if (timeoutOcultarRef.current) clearTimeout(timeoutOcultarRef.current);
 
-    setEstadoRed({
-      conectado: tipo !== "offline",
-      mensaje,
-      tipo,
-      visible: true,
-    });
+    setEstadoBanner({ tipo, visible: true, mensaje });
 
-    Animated.timing(animTranslateY, {
+    Animated.timing(animY, {
       toValue: 0,
-      duration: 250,
-      useNativeDriver: Platform.OS !== "web",
+      duration: 300,
+      useNativeDriver: true,
     }).start();
 
-    if (autoOcultar) {
-      timeoutOcultar.current = setTimeout(() => {
-        Animated.timing(animTranslateY, {
-          toValue: -60,
-          duration: 250,
-          useNativeDriver: Platform.OS !== "web",
-        }).start(() => {
-          setEstadoRed((prev) => ({ ...prev, visible: false }));
-        });
-      }, 3500);
+    if (autoOcultarSegundos) {
+      timeoutOcultarRef.current = setTimeout(() => {
+        ocultarAviso();
+      }, autoOcultarSegundos * 1000);
     }
   };
 
-  useEffect(() => {
-    let primeraCarga = true;
+  const ocultarAviso = () => {
+    Animated.timing(animY, {
+      toValue: -70,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setEstadoBanner((prev) => ({ ...prev, visible: false }));
+    });
+  };
 
-    // 1. Escuchar cambios de conectividad
-    const unsubscribeNet = NetInfo.addEventListener((state) => {
-      const conectado = Boolean(
+  useEffect(() => {
+    // 1. Escuchar estado físico de la conexión a internet
+    const desuscribirNet = NetInfo.addEventListener((state) => {
+      const conectadoActual = Boolean(
         state.isConnected && state.isInternetReachable !== false,
       );
 
-      if (!conectado) {
-        mostrarBanner(
-          "offline",
-          "Sin conexión a internet. Los reportes se guardarán en cola.",
-          false,
-        );
-      } else if (!primeraCarga && conectado) {
-        mostrarBanner("online", "Se recuperó la conexión a internet.");
-        // Si recupera conexión, ejecuta la cola de comandos
-        commandQueueService.procesarCola();
+      if (esPrimeraEvaluacionRef.current) {
+        esPrimeraEvaluacionRef.current = false;
+        if (!conectadoActual) {
+          estabaDesconectadoRef.current = true;
+          mostrarAviso(
+            "offline",
+            "Sin conexión a internet. Modo fuera de línea.",
+          );
+        }
+        return;
       }
 
-      primeraCarga = false;
+      if (!conectadoActual) {
+        estabaDesconectadoRef.current = true;
+        mostrarAviso(
+          "offline",
+          "Sin conexión a internet. Modo fuera de línea.",
+        );
+      } else if (conectadoActual && estabaDesconectadoRef.current) {
+        estabaDesconectadoRef.current = false;
+        mostrarAviso("online", "Se restableció la conexión a internet.", 3);
+      }
     });
 
-    // 2. Escuchar cuando un comando pendiente se ejecuta con éxito
-    const unsubscribeQueue = commandQueueService.suscribir((evento, data) => {
+    // 2. Escuchar la ejecución reactiva del patrón Command
+    const desuscribirQueue = commandQueueService.suscribir((evento, datos) => {
       if (evento === "COMANDO_EJECUTADO") {
-        mostrarBanner(
+        mostrarAviso(
           "sincronizado",
-          `Se envió el reporte pendiente: "${data.titulo}"`,
+          `Reporte sincronizado: "${datos.titulo || "Incidente"}"`,
+          4,
         );
       }
     });
 
     return () => {
-      unsubscribeNet();
-      unsubscribeQueue();
-      if (timeoutOcultar.current) clearTimeout(timeoutOcultar.current);
+      desuscribirNet();
+      desuscribirQueue();
+      if (timeoutOcultarRef.current) clearTimeout(timeoutOcultarRef.current);
     };
   }, []);
 
-  if (!estadoRed.visible) return null;
+  if (!estadoBanner.visible) return null;
 
-  const estiloFondo =
-    estadoRed.tipo === "offline"
-      ? styles.bgOffline
-      : estadoRed.tipo === "online"
-        ? styles.bgOnline
-        : styles.bgSincronizado;
+  const esOffline = estadoBanner.tipo === "offline";
+  const esSincronizado = estadoBanner.tipo === "sincronizado";
 
   return (
     <Animated.View
       style={[
-        styles.bannerContainer,
-        estiloFondo,
-        { transform: [{ translateY: animTranslateY }] },
+        styles.banner,
+        esOffline
+          ? styles.bannerOffline
+          : esSincronizado
+            ? styles.bannerSincronizado
+            : styles.bannerOnline,
+        { transform: [{ translateY: animY }] },
       ]}
     >
-      <View style={styles.contentRow}>
-        {estadoRed.tipo === "offline" ? (
-          <WifiOff size={15} color="#FFFFFF" strokeWidth={2.4} />
-        ) : estadoRed.tipo === "online" ? (
-          <Wifi size={15} color="#FFFFFF" strokeWidth={2.4} />
+      <View style={styles.contenido}>
+        {esOffline ? (
+          <WifiOff size={16} color="#FFFFFF" strokeWidth={2.5} />
+        ) : esSincronizado ? (
+          <CheckCircle2 size={16} color="#FFFFFF" strokeWidth={2.5} />
         ) : (
-          <CheckCircle2 size={15} color="#FFFFFF" strokeWidth={2.4} />
+          <Wifi size={16} color="#FFFFFF" strokeWidth={2.5} />
         )}
-        <Text style={styles.bannerText} numberOfLines={2}>
-          {estadoRed.mensaje}
+        <Text style={styles.texto} numberOfLines={1}>
+          {estadoBanner.mensaje}
         </Text>
       </View>
     </Animated.View>
@@ -120,33 +128,34 @@ export default function NetworkBanner() {
 }
 
 const styles = StyleSheet.create({
-  bannerContainer: {
+  banner: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    zIndex: 9999,
-    paddingTop: Platform.OS === "ios" ? 44 : 26,
-    paddingBottom: 8,
+    zIndex: 99999,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     elevation: 10,
-    shadowColor: "#000",
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
   },
-  bgOffline: { backgroundColor: "#DC2626" },
-  bgOnline: { backgroundColor: "#16A34A" },
-  bgSincronizado: { backgroundColor: "#0284C7" },
-  contentRow: {
+  bannerOffline: {
+    backgroundColor: "#DC2626", // Rojo alerta
+  },
+  bannerOnline: {
+    backgroundColor: "#16A34A", // Verde conexión
+  },
+  bannerSincronizado: {
+    backgroundColor: "#0284C7", // Azul institucional de sincronización
+  },
+  contenido: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
-  bannerText: {
+  texto: {
     color: "#FFFFFF",
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: "700",
   },
 });

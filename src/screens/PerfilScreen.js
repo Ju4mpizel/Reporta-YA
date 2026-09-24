@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Modal,
   Animated,
   Platform,
 } from "react-native";
@@ -26,6 +25,7 @@ import {
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
 import HeaderInstitucional from "../components/HeaderInstitucional";
+import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 export default function PerfilScreen() {
@@ -37,7 +37,9 @@ export default function PerfilScreen() {
   });
   const [misIncidentes, setMisIncidentes] = useState([]);
   const [cargando, setCargando] = useState(true);
-  const [modalVisible, setModalVisible] = useState(false);
+
+  // Modal institucional
+  const [modalLogout, setModalLogout] = useState(false);
 
   const animFade = useRef(new Animated.Value(0)).current;
   const animSlide = useRef(new Animated.Value(20)).current;
@@ -101,20 +103,6 @@ export default function PerfilScreen() {
     }
   }
 
-  const confirmarLogout = () => {
-    setModalVisible(false);
-    logout();
-  };
-
-  if (cargando) {
-    return (
-      <View style={styles.centerContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loadingText}>Cargando perfil ciudadano...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={styles.screenWrapper}>
       <HeaderInstitucional titulo="Credencial Ciudadana" />
@@ -130,7 +118,7 @@ export default function PerfilScreen() {
             transform: [{ translateY: animSlide }],
           }}
         >
-          {/* Tarjeta de Identidad Ciudadana Estilizada */}
+          {/* Tarjeta de Identidad */}
           <View style={styles.identityCard}>
             <View style={styles.avatarWrap}>
               <View style={styles.avatarCircle}>
@@ -168,7 +156,7 @@ export default function PerfilScreen() {
             </View>
           </View>
 
-          {/* Tarjeta de Métricas Territoriales */}
+          {/* Métricas */}
           <View style={styles.statsContainer}>
             <View style={styles.statBox}>
               <Text style={styles.statNum}>{metricas.total}</Text>
@@ -188,7 +176,7 @@ export default function PerfilScreen() {
             </View>
           </View>
 
-          {/* Tarjeta de Información de la Cuenta */}
+          {/* Datos de Registro */}
           <View style={styles.infoCard}>
             <Text style={styles.cardSectionTitle}>DATOS DEL REGISTRO</Text>
 
@@ -239,7 +227,7 @@ export default function PerfilScreen() {
             </View>
           </View>
 
-          {/* Historial Reciente */}
+          {/* Historial */}
           <Text style={styles.sectionHeader}>HISTORIAL RECIENTE</Text>
           {misIncidentes.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -294,11 +282,11 @@ export default function PerfilScreen() {
             ))
           )}
 
-          {/* Botón de Logout Institucional */}
+          {/* Botón Logout */}
           <TouchableOpacity
             style={styles.btnLogout}
             activeOpacity={0.8}
-            onPress={() => setModalVisible(true)}
+            onPress={() => setModalLogout(true)}
           >
             <LogOut size={16} color="#EF4444" strokeWidth={2.4} />
             <Text style={styles.btnLogoutText}>Cerrar Sesión Activa</Text>
@@ -306,50 +294,20 @@ export default function PerfilScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* Modal Bottom Sheet */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalVisible}
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={() => setModalVisible(false)}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalDragHandle} />
-            <View style={styles.modalIconWrap}>
-              <AlertCircle size={28} color="#DC2626" strokeWidth={2.4} />
-            </View>
-            <Text style={styles.modalTitle}>¿Deseas cerrar tu sesión?</Text>
-            <Text style={styles.modalDesc}>
-              Deberás volver a ingresar tu CI y clave de acceso para respaldar o
-              reportar nuevos problemas vecinales.
-            </Text>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.btnModalCancel}
-                activeOpacity={0.7}
-                onPress={() => setModalVisible(false)}
-              >
-                <Text style={styles.btnModalCancelText}>Cancelar</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.btnModalConfirm}
-                activeOpacity={0.8}
-                onPress={confirmarLogout}
-              >
-                <Text style={styles.btnModalConfirmText}>Cerrar Sesión</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      {/* Alerta Institucional de Confirmación de Logout */}
+      <CustomModalAlert
+        visible={modalLogout}
+        tipo="confirmar"
+        titulo="¿Deseas cerrar tu sesión?"
+        mensaje="Deberás volver a ingresar tu CI y contraseña para respaldar o reportar problemas vecinales."
+        textoBotonConfirmar="Cerrar Sesión"
+        textoBotonCancelar="Cancelar"
+        onConfirmar={() => {
+          setModalLogout(false);
+          logout();
+        }}
+        onCancelar={() => setModalLogout(false)}
+      />
     </View>
   );
 }
@@ -592,81 +550,5 @@ const styles = StyleSheet.create({
     color: "#DC2626",
     textTransform: "uppercase",
     letterSpacing: 0.5,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  modalDragHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 2,
-    marginBottom: SPACING.md,
-  },
-  modalIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: "#FEE2E2",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.sm,
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: COLORS.textDark,
-  },
-  modalDesc: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: SPACING.lg,
-    lineHeight: 17,
-    paddingHorizontal: 12,
-  },
-  modalActions: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    width: "100%",
-  },
-  btnModalCancel: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: RADIUS.sm,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-  },
-  btnModalCancelText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: COLORS.textDark,
-  },
-  btnModalConfirm: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-    backgroundColor: "#DC2626",
-  },
-  btnModalConfirmText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#FFFFFF",
-    textTransform: "uppercase",
   },
 });

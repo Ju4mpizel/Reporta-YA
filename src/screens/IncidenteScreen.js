@@ -7,7 +7,6 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
-  Alert,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { useAuth } from "../context/AuthContext";
@@ -15,6 +14,7 @@ import { incidentesService } from "../services/incidentesService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
 import FiltrosAcordeon from "../components/FiltrosAcordeon";
 import IncidenteCard from "../components/IncidenteCard";
+import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, SPACING } from "../constants/theme";
 
 export default function IncidenteScreen({ route, navigation }) {
@@ -26,9 +26,18 @@ export default function IncidenteScreen({ route, navigation }) {
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
 
-  const [zonaActiva] = useState("Cala Cala");
+  // Filtros dinámicos con "Todas" por defecto
+  const [zonaFiltro, setZonaFiltro] = useState("Todas");
   const [calleFiltro, setCalleFiltro] = useState("Todas");
   const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
+
+  // Estado de Alerta Institucional
+  const [alerta, setAlerta] = useState({
+    visible: false,
+    tipo: "info",
+    titulo: "",
+    mensaje: "",
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -61,9 +70,7 @@ export default function IncidenteScreen({ route, navigation }) {
                 animated: true,
                 viewPosition: 0.2,
               });
-            } catch (err) {
-              // Resguardo silencioso
-            }
+            } catch (err) {}
           }
         }, 300);
 
@@ -75,7 +82,6 @@ export default function IncidenteScreen({ route, navigation }) {
   async function cargarIncidentes() {
     try {
       setCargando(true);
-      // Pasamos el ID del usuario para saber cuáles ya apoyó
       const datos = await incidentesService.obtenerParaFeed(perfil?.id);
       setIncidentes(datos);
     } catch (err) {
@@ -86,20 +92,26 @@ export default function IncidenteScreen({ route, navigation }) {
     }
   }
 
+  // Filtrado compuesto: Zona + Calle + Categoría
   const incidentesFiltrados = incidentes.filter((item) => {
+    const coincideZona =
+      zonaFiltro === "Todas" || item.zona_nombre === zonaFiltro;
     const coincideCalle =
       calleFiltro === "Todas" || item.calle_nombre === calleFiltro;
     const coincideCat =
       categoriaFiltro === "Todas" || item.categoria_nombre === categoriaFiltro;
-    return coincideCalle && coincideCat;
+    return coincideZona && coincideCalle && coincideCat;
   });
 
   const handleApoyar = async (incidenteId) => {
     if (!perfil?.id) {
-      Alert.alert(
-        "Acceso requerido",
-        "Inicia sesión para respaldar este reporte.",
-      );
+      setAlerta({
+        visible: true,
+        tipo: "info",
+        titulo: "Acceso Requerido",
+        mensaje:
+          "Debes iniciar sesión con tu carnet de identidad para respaldar este reporte.",
+      });
       return;
     }
 
@@ -121,7 +133,12 @@ export default function IncidenteScreen({ route, navigation }) {
         }),
       );
     } catch (err) {
-      Alert.alert("Aviso", err.message);
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Aviso",
+        mensaje: err.message,
+      });
     }
   };
 
@@ -130,10 +147,10 @@ export default function IncidenteScreen({ route, navigation }) {
       <HeaderInstitucional titulo="Incidentes Urbanos" />
 
       <FiltrosAcordeon
-        zonaSeleccionada={zonaActiva}
+        zonaSeleccionada={zonaFiltro}
         calleSeleccionada={calleFiltro}
         categoriaSeleccionada={categoriaFiltro}
-        onPressZona={() => {}}
+        onPressZona={(zona) => setZonaFiltro(zona)}
         onPressCalle={(calle) => setCalleFiltro(calle)}
         onPressCategoria={(cat) => setCategoriaFiltro(cat)}
       />
@@ -176,6 +193,14 @@ export default function IncidenteScreen({ route, navigation }) {
           )}
         />
       )}
+
+      <CustomModalAlert
+        visible={alerta.visible}
+        tipo={alerta.tipo}
+        titulo={alerta.titulo}
+        mensaje={alerta.mensaje}
+        onConfirmar={() => setAlerta((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

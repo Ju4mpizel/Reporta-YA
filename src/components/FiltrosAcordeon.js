@@ -19,13 +19,15 @@ import { supabase } from "../services/supabase";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 export default function FiltrosAcordeon({
-  zonaSeleccionada = "Cala Cala",
+  zonaSeleccionada = "Todas",
   calleSeleccionada = "Todas",
   categoriaSeleccionada = "Todas",
+  onPressZona,
   onPressCalle,
   onPressCategoria,
 }) {
   const [desplegado, setDesplegado] = useState(null);
+  const [zonas, setZonas] = useState([]);
   const [calles, setCalles] = useState([]);
   const [categorias, setCategorias] = useState([]);
 
@@ -35,7 +37,8 @@ export default function FiltrosAcordeon({
 
   async function cargarOpciones() {
     try {
-      const [resCalles, resCats] = await Promise.all([
+      const [resZonas, resCalles, resCats] = await Promise.all([
+        supabase.from("zonas").select("id, nombre").order("nombre"),
         supabase.from("calles").select("id, nombre").order("nombre"),
         supabase
           .from("categorias_incidente")
@@ -43,6 +46,7 @@ export default function FiltrosAcordeon({
           .order("nombre"),
       ]);
 
+      if (resZonas.data) setZonas(resZonas.data);
       if (resCalles.data) setCalles(resCalles.data);
       if (resCats.data) setCategorias(resCats.data);
     } catch (err) {
@@ -54,21 +58,61 @@ export default function FiltrosAcordeon({
     setDesplegado((prev) => (prev === tipo ? null : tipo));
   };
 
+  const getListaActual = () => {
+    if (desplegado === "zona") return zonas;
+    if (desplegado === "calle") return calles;
+    if (desplegado === "categoria") return categorias;
+    return [];
+  };
+
+  const getValorSeleccionado = () => {
+    if (desplegado === "zona") return zonaSeleccionada;
+    if (desplegado === "calle") return calleSeleccionada;
+    if (desplegado === "categoria") return categoriaSeleccionada;
+    return "Todas";
+  };
+
+  const handleSeleccionar = (nombre) => {
+    if (desplegado === "zona" && onPressZona) onPressZona(nombre);
+    if (desplegado === "calle" && onPressCalle) onPressCalle(nombre);
+    if (desplegado === "categoria" && onPressCategoria)
+      onPressCategoria(nombre);
+    setDesplegado(null);
+  };
+
   return (
     <View style={styles.container}>
       <View style={styles.bar}>
-        {/* Filtro Zona Fijo */}
-        <View style={[styles.filterBox, styles.filterBoxDisabled]}>
+        {/* Filtro Zona Activo */}
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={[
+            styles.filterBox,
+            desplegado === "zona" && styles.filterBoxActive,
+          ]}
+          onPress={() => toggle("zona")}
+        >
           <View style={styles.content}>
             <View style={styles.labelRow}>
-              <MapPin size={10} color={COLORS.primary} strokeWidth={2.4} />
+              <MapPin
+                size={10}
+                color={
+                  desplegado === "zona" ? COLORS.primary : COLORS.textMuted
+                }
+                strokeWidth={2.4}
+              />
               <Text style={styles.label}>Zona</Text>
             </View>
             <Text style={styles.value} numberOfLines={1}>
               {zonaSeleccionada}
             </Text>
           </View>
-        </View>
+          {desplegado === "zona" ? (
+            <ChevronUp size={12} color={COLORS.primary} strokeWidth={2.4} />
+          ) : (
+            <ChevronDown size={12} color={COLORS.textDark} strokeWidth={2.4} />
+          )}
+        </TouchableOpacity>
 
         {/* Filtro Calle */}
         <TouchableOpacity
@@ -133,7 +177,7 @@ export default function FiltrosAcordeon({
         </TouchableOpacity>
       </View>
 
-      {/* Desplegable de Chips */}
+      {/* Desplegable Horizontal de Chips */}
       {desplegado && (
         <View style={styles.dropdown}>
           <ScrollView
@@ -145,50 +189,28 @@ export default function FiltrosAcordeon({
               activeOpacity={0.7}
               style={[
                 styles.chip,
-                ((desplegado === "calle" && calleSeleccionada === "Todas") ||
-                  (desplegado === "categoria" &&
-                    categoriaSeleccionada === "Todas")) &&
-                  styles.chipActive,
+                getValorSeleccionado() === "Todas" && styles.chipActive,
               ]}
-              onPress={() => {
-                if (desplegado === "calle" && onPressCalle)
-                  onPressCalle("Todas");
-                if (desplegado === "categoria" && onPressCategoria)
-                  onPressCategoria("Todas");
-                setDesplegado(null);
-              }}
+              onPress={() => handleSeleccionar("Todas")}
             >
               <Text
                 style={[
                   styles.chipText,
-                  ((desplegado === "calle" && calleSeleccionada === "Todas") ||
-                    (desplegado === "categoria" &&
-                      categoriaSeleccionada === "Todas")) &&
-                    styles.chipTextActive,
+                  getValorSeleccionado() === "Todas" && styles.chipTextActive,
                 ]}
               >
                 Todas
               </Text>
             </TouchableOpacity>
 
-            {(desplegado === "calle" ? calles : categorias).map((item) => {
-              const seleccionado =
-                desplegado === "calle"
-                  ? calleSeleccionada === item.nombre
-                  : categoriaSeleccionada === item.nombre;
-
+            {getListaActual().map((item) => {
+              const seleccionado = getValorSeleccionado() === item.nombre;
               return (
                 <TouchableOpacity
                   key={item.id}
                   activeOpacity={0.7}
                   style={[styles.chip, seleccionado && styles.chipActive]}
-                  onPress={() => {
-                    if (desplegado === "calle" && onPressCalle)
-                      onPressCalle(item.nombre);
-                    if (desplegado === "categoria" && onPressCategoria)
-                      onPressCategoria(item.nombre);
-                    setDesplegado(null);
-                  }}
+                  onPress={() => handleSeleccionar(item.nombre)}
                 >
                   {seleccionado && (
                     <Check size={11} color="#FFFFFF" strokeWidth={3} />
@@ -237,9 +259,6 @@ const styles = StyleSheet.create({
   filterBoxActive: {
     borderColor: COLORS.primary,
     backgroundColor: "#F0F9FF",
-  },
-  filterBoxDisabled: {
-    backgroundColor: "#F8FAFC",
   },
   content: {
     flex: 1,

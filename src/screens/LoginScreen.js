@@ -11,16 +11,23 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from "react-native";
 import { LogIn, FileText, Lock, ShieldCheck } from "lucide-react-native";
 import { useAuth } from "../context/AuthContext";
+import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 export default function LoginScreen({ navigation }) {
   const { login, cargando } = useAuth();
   const [ci, setCi] = useState("");
   const [password, setPassword] = useState("");
+
+  const [alerta, setAlerta] = useState({
+    visible: false,
+    tipo: "error",
+    titulo: "",
+    mensaje: "",
+  });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -59,14 +66,26 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     if (!ci.trim() || !password.trim()) {
-      Alert.alert("Campos requeridos", "Ingresa tu CI y contraseña.");
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Campos Requeridos",
+        mensaje:
+          "Por favor ingresa tu cédula de identidad y tu contraseña de acceso.",
+      });
       return;
     }
 
     try {
       await login(ci, password);
     } catch (err) {
-      Alert.alert("Acceso denegado", err.message);
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Acceso Denegado",
+        mensaje:
+          err.message || "Credenciales incorrectas o cuenta inhabilitada.",
+      });
     }
   };
 
@@ -177,6 +196,15 @@ export default function LoginScreen({ navigation }) {
           </View>
         </Animated.View>
       </ScrollView>
+
+      {/* Alerta Institucional */}
+      <CustomModalAlert
+        visible={alerta.visible}
+        tipo={alerta.tipo}
+        titulo={alerta.titulo}
+        mensaje={alerta.mensaje}
+        onConfirmar={() => setAlerta((prev) => ({ ...prev, visible: false }))}
+      />
     </KeyboardAvoidingView>
   );
 }

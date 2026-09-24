@@ -11,7 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Modal,
 } from "react-native";
 import {
   UserPlus,
@@ -21,16 +20,15 @@ import {
   Lock,
   ArrowLeft,
   AlertCircle,
-  CheckCircle2,
   ChevronDown,
   ChevronUp,
   Check,
 } from "lucide-react-native";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
+import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
-// Departamentos de Bolivia para la expedición oficial del CI
 const EXPEDICIONES = [
   { sigla: "CB", nombre: "Cochabamba" },
   { sigla: "LP", nombre: "La Paz" },
@@ -48,7 +46,7 @@ export default function RegistroScreen({ navigation }) {
 
   const [nombreCompleto, setNombreCompleto] = useState("");
   const [ciNumero, setCiNumero] = useState("");
-  const [expedicion, setExpedicion] = useState("CB"); // Cochabamba por defecto
+  const [expedicion, setExpedicion] = useState("CB");
   const [menuExpedicionAbierto, setMenuExpedicionAbierto] = useState(false);
   const [telefono, setTelefono] = useState("");
   const [password, setPassword] = useState("");
@@ -56,13 +54,13 @@ export default function RegistroScreen({ navigation }) {
   const [errores, setErrores] = useState({});
   const [verificandoCI, setVerificandoCI] = useState(false);
 
-  // Modal institucional
-  const [modalInfo, setModalInfo] = useState({
+  // Alerta Institucional
+  const [alerta, setAlerta] = useState({
     visible: false,
-    tipo: "error", // 'exito' | 'error'
+    tipo: "error",
     titulo: "",
     mensaje: "",
-    onAceptar: null,
+    onConfirmar: null,
   });
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -84,8 +82,6 @@ export default function RegistroScreen({ navigation }) {
     ]).start();
   }, []);
 
-  // --- FILTROS DE ENTRADA EN TIEMPO REAL ---
-
   const handleNombreChange = (texto) => {
     const filtrado = texto.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, "");
     setNombreCompleto(filtrado);
@@ -93,7 +89,6 @@ export default function RegistroScreen({ navigation }) {
   };
 
   const handleCiChange = (texto) => {
-    // Permite únicamente dígitos numéricos entre 5 y 8 números
     const soloNumeros = texto.replace(/[^0-9]/g, "").slice(0, 8);
     setCiNumero(soloNumeros);
     if (errores.ci) setErrores((prev) => ({ ...prev, ci: null }));
@@ -109,8 +104,6 @@ export default function RegistroScreen({ navigation }) {
     setPassword(texto);
     if (errores.password) setErrores((prev) => ({ ...prev, password: null }));
   };
-
-  // --- VALIDACIONES DE INTEGRIDAD ---
 
   const validarFormulario = () => {
     const nuevosErrores = {};
@@ -168,22 +161,6 @@ export default function RegistroScreen({ navigation }) {
     }
   };
 
-  const abrirModalAviso = (tipo, titulo, mensaje, onAceptar = null) => {
-    setModalInfo({
-      visible: true,
-      tipo,
-      titulo,
-      mensaje,
-      onAceptar,
-    });
-  };
-
-  const cerrarModalAviso = () => {
-    const callback = modalInfo.onAceptar;
-    setModalInfo((prev) => ({ ...prev, visible: false }));
-    if (callback) callback();
-  };
-
   const handlePressIn = () => {
     Animated.spring(scaleBtn, {
       toValue: 0.96,
@@ -202,29 +179,31 @@ export default function RegistroScreen({ navigation }) {
 
   const handleRegistro = async () => {
     if (!validarFormulario()) {
-      abrirModalAviso(
-        "error",
-        "Formulario Incompleto",
-        "Revisa los campos señalados en rojo antes de continuar.",
-      );
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Formulario Incompleto",
+        mensaje: "Revisa los campos señalados en rojo antes de continuar.",
+        onConfirmar: null,
+      });
       return;
     }
 
-    // Armamos el carnet oficial con su extensión (ej: "7894561 CB")
     const ciCompleto = `${ciNumero.trim()} ${expedicion}`;
 
-    // Verificación de unicidad
     const yaExiste = await verificarCiExistente(ciCompleto);
     if (yaExiste) {
       setErrores((prev) => ({
         ...prev,
         ci: "Este carnet de identidad ya se encuentra registrado.",
       }));
-      abrirModalAviso(
-        "error",
-        "Carnet ya Empadronado",
-        `El documento ${ciCompleto} ya cuenta con una cuenta activa en el sistema de Cala Cala. Si olvidaste tu contraseña, acude a la Subalcaldía.`,
-      );
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Carnet ya Empadronado",
+        mensaje: `El documento ${ciCompleto} ya cuenta con una cuenta activa en el sistema.`,
+        onConfirmar: null,
+      });
       return;
     }
 
@@ -236,18 +215,22 @@ export default function RegistroScreen({ navigation }) {
         password,
       });
 
-      abrirModalAviso(
-        "exito",
-        "¡Registro Exitoso!",
-        `Tu cuenta con CI ${ciCompleto} ha sido empadronada correctamente en el Distrito 12. Ya puedes ingresar al portal ciudadano.`,
-        () => navigation.navigate("Login"),
-      );
+      setAlerta({
+        visible: true,
+        tipo: "exito",
+        titulo: "¡Registro Exitoso!",
+        mensaje: `Tu cuenta con CI ${ciCompleto} ha sido empadronada correctamente en el Distrito 12. Ya puedes ingresar al portal ciudadano.`,
+        onConfirmar: () => navigation.navigate("Login"),
+      });
     } catch (err) {
-      abrirModalAviso(
-        "error",
-        "Error en el Registro",
-        err.message || "Ocurrió un error al procesar el empadronamiento.",
-      );
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Error en el Registro",
+        mensaje:
+          err.message || "Ocurrió un error al procesar el empadronamiento.",
+        onConfirmar: null,
+      });
     }
   };
 
@@ -312,7 +295,7 @@ export default function RegistroScreen({ navigation }) {
             ) : null}
           </View>
 
-          {/* Carnet de Identidad con Selector de Expedición */}
+          {/* CI con Expedición */}
           <View style={styles.inputGroup}>
             <View style={styles.labelRow}>
               <Text style={styles.inputLabel}>Cédula de Identidad (CI)</Text>
@@ -322,7 +305,6 @@ export default function RegistroScreen({ navigation }) {
             </View>
 
             <View style={styles.ciCompositeRow}>
-              {/* Input Numérico */}
               <View
                 style={[
                   styles.inputWrapper,
@@ -346,7 +328,6 @@ export default function RegistroScreen({ navigation }) {
                 />
               </View>
 
-              {/* Botón Desplegable de Expedición */}
               <TouchableOpacity
                 style={[
                   styles.expedicionTrigger,
@@ -372,7 +353,6 @@ export default function RegistroScreen({ navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Acordeón / Desplegable de Departamentos */}
             {menuExpedicionAbierto && (
               <View style={styles.dropdownDepartamentos}>
                 <Text style={styles.dropdownTitle}>Lugar de Expedición:</Text>
@@ -528,54 +508,18 @@ export default function RegistroScreen({ navigation }) {
         </Animated.View>
       </ScrollView>
 
-      {/* MODAL INSTITUCIONAL ELEGANTE */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalInfo.visible}
-        onRequestClose={cerrarModalAviso}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={cerrarModalAviso}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalDragHandle} />
-
-            {modalInfo.tipo === "exito" ? (
-              <View style={styles.modalIconWrapGreen}>
-                <CheckCircle2 size={30} color="#16A34A" strokeWidth={2.4} />
-              </View>
-            ) : (
-              <View style={styles.modalIconWrapAmber}>
-                <AlertCircle size={30} color="#D97706" strokeWidth={2.4} />
-              </View>
-            )}
-
-            <Text style={styles.modalTitle}>{modalInfo.titulo}</Text>
-            <Text style={styles.modalDesc}>{modalInfo.mensaje}</Text>
-
-            <TouchableOpacity
-              style={[
-                styles.btnModalConfirm,
-                modalInfo.tipo === "exito"
-                  ? styles.btnModalGreen
-                  : styles.btnModalDark,
-              ]}
-              activeOpacity={0.8}
-              onPress={cerrarModalAviso}
-            >
-              <Text style={styles.btnModalConfirmText}>
-                {modalInfo.tipo === "exito"
-                  ? "Ir al Inicio de Sesión"
-                  : "Entendido"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Alerta Institucional */}
+      <CustomModalAlert
+        visible={alerta.visible}
+        tipo={alerta.tipo}
+        titulo={alerta.titulo}
+        mensaje={alerta.mensaje}
+        onConfirmar={() => {
+          const accion = alerta.onConfirmar;
+          setAlerta((prev) => ({ ...prev, visible: false }));
+          if (accion) accion();
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -638,7 +582,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /* Input Compuesto para CI + Expedición */
   ciCompositeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -670,7 +613,6 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
   },
 
-  /* Acordeón de Expediciones */
   dropdownDepartamentos: {
     marginTop: 8,
     backgroundColor: "#F8FAFC",
@@ -762,80 +704,6 @@ const styles = StyleSheet.create({
     color: COLORS.textWhite,
     fontSize: 12,
     fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  /* Modal */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  modalDragHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 2,
-    marginBottom: SPACING.md,
-  },
-  modalIconWrapGreen: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.sm,
-  },
-  modalIconWrapAmber: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#FEF3C7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.sm,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: COLORS.textDark,
-  },
-  modalDesc: {
-    fontSize: 12.5,
-    color: COLORS.textMuted,
-    textAlign: "center",
-    marginTop: 6,
-    marginBottom: SPACING.lg,
-    lineHeight: 18,
-    paddingHorizontal: 8,
-  },
-  btnModalConfirm: {
-    width: "100%",
-    paddingVertical: 13,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-  },
-  btnModalGreen: {
-    backgroundColor: "#16A34A",
-  },
-  btnModalDark: {
-    backgroundColor: COLORS.primaryDark,
-  },
-  btnModalConfirmText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#FFFFFF",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },

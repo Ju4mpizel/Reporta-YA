@@ -9,8 +9,8 @@ import {
   ScrollView,
   TextInput,
   Modal,
-  Alert,
   Linking,
+  Platform,
 } from "react-native";
 import {
   Navigation,
@@ -29,6 +29,7 @@ import { useAuth } from "../context/AuthContext";
 import { incidentesService } from "../services/incidentesService";
 import { callesService } from "../services/callesService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
+import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS } from "../constants/theme";
 
 const LAT_DEFAULT = -17.3684722;
@@ -37,7 +38,13 @@ const LNG_DEFAULT = -66.1638889;
 export default function MapaScreen({ route, navigation }) {
   const { perfil } = useAuth();
 
-  // Detección precisa de rol basada en tu tabla perfiles / roles
+  // Aseguramos el título de la pestaña del navegador web
+  useEffect(() => {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
+      document.title = "Mapa Territorial | Reporta YA!";
+    }
+  }, []);
+
   const rolUser = (
     perfil?.rol_id ||
     perfil?.roles?.id ||
@@ -48,15 +55,20 @@ export default function MapaScreen({ route, navigation }) {
     .toLowerCase()
     .trim();
 
-  const esAdmin =
+  const esAdmin = Boolean(
     rolUser.includes("admin") ||
     rolUser.includes("funcionario") ||
-    perfil?.es_admin === true;
+    perfil?.es_admin === true,
+  );
 
   const [incidentes, setIncidentes] = useState([]);
   const [incidenteActivo, setIncidenteActivo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [menuAbierto, setMenuAbierto] = useState(false);
+
+  // Zonas de catastro
+  const [zonas, setZonas] = useState([]);
+  const [zonaSeleccionada, setZonaSeleccionada] = useState(null);
 
   // Coordenada capturada por el admin
   const [coordenadaMarcada, setCoordenadaMarcada] = useState(null);
@@ -67,13 +79,34 @@ export default function MapaScreen({ route, navigation }) {
   const [tipoNuevaCalle, setTipoNuevaCalle] = useState("avenida");
   const [guardandoCalle, setGuardandoCalle] = useState(false);
 
+  // Estado para la alerta personalizada unificada
+  const [alerta, setAlerta] = useState({
+    visible: false,
+    tipo: "exito",
+    titulo: "",
+    mensaje: "",
+  });
+
   const incidenteIdParam = route?.params?.incidenteIdSeleccionado;
 
   useFocusEffect(
     useCallback(() => {
       cargarIncidentes();
+      cargarZonas();
     }, []),
   );
+
+  async function cargarZonas() {
+    try {
+      const lista = await callesService.obtenerZonas();
+      setZonas(lista);
+      if (lista.length > 0 && !zonaSeleccionada) {
+        setZonaSeleccionada(lista[0].id);
+      }
+    } catch (e) {
+      console.error("Error al cargar zonas:", e);
+    }
+  }
 
   useEffect(() => {
     const handleMensajeIframe = (event) => {
@@ -145,7 +178,6 @@ export default function MapaScreen({ route, navigation }) {
     }
   }
 
-  // Notificar al iframe que vuele hacia el incidente seleccionado
   const enfocarIncidente = (inc) => {
     setIncidenteActivo(inc);
     setMenuAbierto(false);
@@ -168,11 +200,21 @@ export default function MapaScreen({ route, navigation }) {
 
   const handleGuardarCalle = async () => {
     if (!nombreNuevaCalle.trim()) {
-      Alert.alert("Atención", "Ingresa el nombre de la vía.");
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Nombre Requerido",
+        mensaje: "Por favor ingresa el nombre de la vía o intersección.",
+      });
       return;
     }
     if (!coordenadaMarcada) {
-      Alert.alert("Error", "Toca primero en el mapa para ubicar la vía.");
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Punto no marcado",
+        mensaje: "Toca primero en el mapa para ubicar la vía exactamente.",
+      });
       return;
     }
 
@@ -181,19 +223,29 @@ export default function MapaScreen({ route, navigation }) {
       await callesService.crearCalle({
         nombre: nombreNuevaCalle.trim(),
         tipo: tipoNuevaCalle,
+        zonaId: zonaSeleccionada,
         latitud: coordenadaMarcada.lat,
         longitud: coordenadaMarcada.lng,
       });
 
-      Alert.alert(
-        "Éxito",
-        `Calle "${nombreNuevaCalle}" registrada con precisión.`,
-      );
       setModalVisible(false);
       setNombreNuevaCalle("");
       cargarIncidentes();
+
+      setAlerta({
+        visible: true,
+        tipo: "exito",
+        titulo: "Vía Registrada",
+        mensaje: `La vía "${nombreNuevaCalle}" se guardó correctamente en el catastro municipal.`,
+      });
     } catch (err) {
-      Alert.alert("Error", err.message || "No se pudo guardar la calle.");
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Error al guardar",
+        mensaje:
+          err.message || "No se pudo registrar la calle en la base de datos.",
+      });
     } finally {
       setGuardandoCalle(false);
     }
@@ -209,7 +261,6 @@ export default function MapaScreen({ route, navigation }) {
       Number(coordenadaMarcada?.lng) ||
       LNG_DEFAULT;
 
-    // Convertir incidentes a JSON seguro para pintar los alfileres
     const jsonIncidentes = JSON.stringify(
       incidentes
         .filter((i) => i.lat && i.lng)
@@ -217,17 +268,18 @@ export default function MapaScreen({ route, navigation }) {
           id: i.id,
           lat: i.lat,
           lng: i.lng,
-          titulo: i.titulo,
-          calle: i.calle_nombre,
-          estado: i.estado,
+          titulo: i.titulo || "Incidente",
+          calle: i.calle_nombre || "Vía",
+          estado: i.estado || "en_revision",
         })),
     );
 
     return `
       <!DOCTYPE html>
-      <html>
+      <html lang="es">
         <head>
           <meta charset="utf-8" />
+          <title>Mapa Territorial</title>
           <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
           <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
           <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -235,44 +287,25 @@ export default function MapaScreen({ route, navigation }) {
             html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f1f5f9; }
             .leaflet-popup-content-wrapper { border-radius: 8px; font-family: system-ui, sans-serif; }
             
-            /* PIN ESTILO ALFILER CON CABEZA DE BOLITA ROJA (INCIDENTES) */
-            .pin-alfiler-wrapper {
-              position: relative;
-              width: 24px;
-              height: 36px;
-            }
+            .pin-alfiler-wrapper { position: relative; width: 24px; height: 36px; }
             .pin-bolita-roja {
-              width: 16px;
-              height: 16px;
+              width: 16px; height: 16px;
               background: radial-gradient(circle at 35% 35%, #EF4444, #991B1B);
               border: 1.5px solid #FFFFFF;
               border-radius: 50%;
               box-shadow: 0 3px 6px rgba(0,0,0,0.35);
-              position: absolute;
-              top: 0;
-              left: 4px;
-              z-index: 2;
+              position: absolute; top: 0; left: 4px; z-index: 2;
             }
             .pin-aguja-metalica {
-              width: 2.5px;
-              height: 20px;
+              width: 2.5px; height: 20px;
               background: linear-gradient(to right, #94A3B8, #475569);
-              position: absolute;
-              top: 15px;
-              left: 11px;
-              border-radius: 1px;
-              z-index: 1;
+              position: absolute; top: 15px; left: 11px; border-radius: 1px; z-index: 1;
             }
             .pin-sombra-base {
-              width: 8px;
-              height: 4px;
+              width: 8px; height: 4px;
               background: rgba(0,0,0,0.3);
-              border-radius: 50%;
-              position: absolute;
-              bottom: 0;
-              left: 8px;
+              border-radius: 50%; position: absolute; bottom: 0; left: 8px;
             }
-
             .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; }
             .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; }
           </style>
@@ -285,10 +318,8 @@ export default function MapaScreen({ route, navigation }) {
 
             var map = L.map('map', { zoomControl: false }).setView([${latInicial}, ${lngInicial}], 16);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-
             L.control.zoom({ position: 'topright' }).addTo(map);
 
-            // Icono personalizado tipo Alfiler con bolita roja para los incidentes
             var iconoAlfilerRojo = L.divIcon({
               className: 'alfiler-custom',
               html: '<div class="pin-alfiler-wrapper"><div class="pin-bolita-roja"></div><div class="pin-aguja-metalica"></div><div class="pin-sombra-base"></div></div>',
@@ -297,13 +328,11 @@ export default function MapaScreen({ route, navigation }) {
               popupAnchor: [0, -32]
             });
 
-            // Diccionario para abrir popups al seleccionar desde React Native
             var marcadoresIncidentes = {};
 
-            // Pintar todos los incidentes estáticos en el mapa
             incidentes.forEach(function(inc) {
               var m = L.marker([inc.lat, inc.lng], { icon: iconoAlfilerRojo }).addTo(map);
-              var popHtml = '<div class="pop-calle">🔴 ' + inc.calle + '</div><div class="pop-tit">' + inc.titulo + '</div>';
+              var popHtml = '<div class="pop-calle">🔴 ' + (inc.calle || '') + '</div><div class="pop-tit">' + (inc.titulo || '') + '</div>';
               m.bindPopup(popHtml);
 
               m.on('click', function() {
@@ -313,7 +342,6 @@ export default function MapaScreen({ route, navigation }) {
               marcadoresIncidentes[inc.id] = m;
             });
 
-            // Marcador azul de calibración (SOLO ADMIN)
             var markerAdmin = null;
 
             if (esAdmin) {
@@ -334,7 +362,6 @@ export default function MapaScreen({ route, navigation }) {
               });
             }
 
-            // Escuchar peticiones desde React Native para volar hacia un incidente
             window.addEventListener('message', function(event) {
               try {
                 var d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
@@ -354,11 +381,13 @@ export default function MapaScreen({ route, navigation }) {
     `;
   };
 
+  const tituloEncabezado = esAdmin
+    ? "Gestor Territorial (Admin)"
+    : "Mapa Territorial";
+
   return (
     <View style={styles.container}>
-      <HeaderInstitucional
-        titulo={esAdmin ? "Gestor Territorial (Admin)" : "Mapa Territorial"}
-      />
+      <HeaderInstitucional titulo={tituloEncabezado} />
 
       <View style={styles.mapContainer}>
         {cargando ? (
@@ -372,7 +401,7 @@ export default function MapaScreen({ route, navigation }) {
             key={`mapa-${esAdmin ? "admin" : "ciudadano"}`}
             srcDoc={generarHtmlLeaflet()}
             style={styles.iframe}
-            title="Gestor Territorial"
+            title="Mapa Territorial Cochabamba D12"
           />
         )}
 
@@ -411,10 +440,10 @@ export default function MapaScreen({ route, navigation }) {
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.headerCalle} numberOfLines={1}>
-                  {incidenteActivo.calle_nombre}
+                  {incidenteActivo.calle_nombre || "UBICACIÓN REGISTRADA"}
                 </Text>
                 <Text style={styles.headerTitulo} numberOfLines={1}>
-                  {incidenteActivo.titulo}
+                  {incidenteActivo.titulo || "Incidente Urbano"}
                 </Text>
               </View>
               {menuAbierto ? (
@@ -440,10 +469,10 @@ export default function MapaScreen({ route, navigation }) {
                       >
                         <View style={{ flex: 1 }}>
                           <Text style={styles.listItemCalle}>
-                            {idx + 1}. {inc.calle_nombre}
+                            {idx + 1}. {inc.calle_nombre || "Vía"}
                           </Text>
                           <Text style={styles.listItemTitulo} numberOfLines={1}>
-                            {inc.titulo}
+                            {inc.titulo || "Reporte"}
                           </Text>
                         </View>
                         {esSeleccionado && (
@@ -463,7 +492,7 @@ export default function MapaScreen({ route, navigation }) {
               </View>
             )}
 
-            {/* Barra de Acciones: Abrir en Google Maps + Ver Detalle */}
+            {/* Barra de Acciones */}
             <View style={styles.cardActionsRow}>
               <TouchableOpacity
                 style={styles.btnAppMaps}
@@ -510,7 +539,7 @@ export default function MapaScreen({ route, navigation }) {
         )}
       </View>
 
-      {/* Modal para Guardar Calle: SOLO PARA ADMIN */}
+      {/* Modal para Guardar Calle con Selector de Zona */}
       {esAdmin && (
         <Modal visible={modalVisible} transparent animationType="fade">
           <View style={styles.modalOverlay}>
@@ -524,14 +553,42 @@ export default function MapaScreen({ route, navigation }) {
                 </TouchableOpacity>
               </View>
 
-              <Text style={styles.modalLabel}>
-                Coordenadas exactas marcadas:
-              </Text>
+              <Text style={styles.modalLabel}>Coordenadas marcadas:</Text>
               <View style={styles.modalCoordBox}>
                 <Text style={styles.modalCoordText}>
                   {coordenadaMarcada?.lat}, {coordenadaMarcada?.lng}
                 </Text>
               </View>
+
+              <Text style={styles.modalLabel}>Zona Municipal:</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginBottom: 4 }}
+              >
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  {zonas.map((z) => (
+                    <TouchableOpacity
+                      key={z.id}
+                      style={[
+                        styles.chipZona,
+                        zonaSeleccionada === z.id && styles.chipZonaActiva,
+                      ]}
+                      onPress={() => setZonaSeleccionada(z.id)}
+                    >
+                      <Text
+                        style={[
+                          styles.chipZonaText,
+                          zonaSeleccionada === z.id &&
+                            styles.chipZonaTextActiva,
+                        ]}
+                      >
+                        {z.nombre}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </ScrollView>
 
               <Text style={styles.modalLabel}>Nombre oficial de la vía:</Text>
               <TextInput
@@ -583,6 +640,15 @@ export default function MapaScreen({ route, navigation }) {
           </View>
         </Modal>
       )}
+
+      {/* Alerta Institucional Reutilizable */}
+      <CustomModalAlert
+        visible={alerta.visible}
+        tipo={alerta.tipo}
+        titulo={alerta.titulo}
+        mensaje={alerta.mensaje}
+        onConfirmar={() => setAlerta((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }
@@ -764,6 +830,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.primaryDark,
     fontWeight: "700",
+  },
+  chipZona: {
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.sm || 6,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    backgroundColor: "#FFFFFF",
+  },
+  chipZonaActiva: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  chipZonaText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#475569",
+  },
+  chipZonaTextActiva: {
+    color: "#FFFFFF",
   },
   input: {
     borderWidth: 1,

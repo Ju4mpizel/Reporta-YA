@@ -1,3 +1,4 @@
+// src/screens/GestionIncidenteScreen.js
 import React, { useEffect, useState, useRef } from "react";
 import {
   StyleSheet,
@@ -7,7 +8,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Modal,
   Linking,
   Animated,
   Platform,
@@ -21,7 +21,6 @@ import {
   ChevronDown,
   ChevronUp,
   Check,
-  CheckCircle2,
   MapPin,
   ExternalLink,
   FileCheck,
@@ -29,6 +28,7 @@ import {
 import { supabase } from "../services/supabase";
 import { incidentesService } from "../services/incidentesService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
+import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 const ESTADOS_DISPONIBLES = [
@@ -55,7 +55,15 @@ export default function GestionIncidenteScreen({ route, navigation }) {
   const [acordeonAbierto, setAcordeonAbierto] = useState(null);
   const [cargandoDeptos, setCargandoDeptos] = useState(true);
   const [guardando, setGuardando] = useState(false);
-  const [modalExitoVisible, setModalExitoVisible] = useState(false);
+
+  // Alerta personalizada
+  const [alerta, setAlerta] = useState({
+    visible: false,
+    tipo: "exito",
+    titulo: "",
+    mensaje: "",
+    onConfirmar: null,
+  });
 
   const animFade = useRef(new Animated.Value(0)).current;
 
@@ -103,18 +111,26 @@ export default function GestionIncidenteScreen({ route, navigation }) {
         notaAlcaldia: notaMunicipal,
       });
 
-      setModalExitoVisible(true);
+      setAlerta({
+        visible: true,
+        tipo: "exito",
+        titulo: "¡Expediente Actualizado!",
+        mensaje:
+          "La unidad responsable, el estado y la resolución municipal fueron guardados exitosamente.",
+        onConfirmar: () => navigation.goBack(),
+      });
     } catch (err) {
-      console.error("Error al dictaminar:", err.message);
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Error al dictaminar",
+        mensaje: err.message || "No se pudo actualizar el expediente.",
+        onConfirmar: null,
+      });
     } finally {
       setGuardando(false);
     }
   }
-
-  const handleCerrarModal = () => {
-    setModalExitoVisible(false);
-    navigation.goBack();
-  };
 
   const nombreDeptoActual = deptoSeleccionado
     ? departamentos.find((d) => d.id === deptoSeleccionado)?.nombre ||
@@ -141,7 +157,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: animFade }}>
-          {/* Tarjeta Resumen del Incidente */}
+          {/* Tarjeta Resumen */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryInfo}>
               <View style={styles.badgeJurisdiccion}>
@@ -395,42 +411,18 @@ export default function GestionIncidenteScreen({ route, navigation }) {
         </Animated.View>
       </ScrollView>
 
-      {/* Modal Bottom Sheet de Éxito */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalExitoVisible}
-        onRequestClose={handleCerrarModal}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={handleCerrarModal}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalDragHandle} />
-            <View style={styles.modalIconWrap}>
-              <CheckCircle2 size={32} color="#16A34A" strokeWidth={2.4} />
-            </View>
-            <Text style={styles.modalTitle}>¡Expediente Actualizado!</Text>
-            <Text style={styles.modalDesc}>
-              La unidad responsable, el estado y la resolución oficial fueron
-              registrados correctamente en el padrón municipal.
-            </Text>
-
-            <TouchableOpacity
-              style={styles.btnModalConfirm}
-              activeOpacity={0.8}
-              onPress={handleCerrarModal}
-            >
-              <Text style={styles.btnModalConfirmText}>
-                Volver a la Bandeja
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Alerta Institucional */}
+      <CustomModalAlert
+        visible={alerta.visible}
+        tipo={alerta.tipo}
+        titulo={alerta.titulo}
+        mensaje={alerta.mensaje}
+        onConfirmar={() => {
+          const accion = alerta.onConfirmar;
+          setAlerta((prev) => ({ ...prev, visible: false }));
+          if (accion) accion();
+        }}
+      />
     </View>
   );
 }
@@ -609,65 +601,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 11,
     fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  modalDragHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 2,
-    marginBottom: SPACING.md,
-  },
-  modalIconWrap: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.sm,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: COLORS.textDark,
-  },
-  modalDesc: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: SPACING.lg,
-    lineHeight: 18,
-    paddingHorizontal: 8,
-  },
-  btnModalConfirm: {
-    width: "100%",
-    paddingVertical: 13,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-    backgroundColor: COLORS.primaryDark,
-  },
-  btnModalConfirmText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#FFFFFF",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },

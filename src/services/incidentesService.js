@@ -41,9 +41,6 @@ export const incidentesService = {
       return null;
     }
   },
-
-  // src/services/incidentesService.js
-  // Dentro de obtenerParaFeed():
   async obtenerParaFeed(usuarioIdActual = null) {
     const { data, error } = await supabase
       .from("incidentes")
@@ -57,7 +54,7 @@ export const incidentesService = {
         departamento_id,
         foto_url,
         created_at,
-        calles!calle_id ( id, nombre, latitud, longitud, google_maps_url ),
+        calles!calle_id ( id, nombre, latitud, longitud, google_maps_url, zonas ( id, nombre ) ),
         categorias_incidente ( id, nombre ),
         departamentos!departamento_id ( id, nombre ),
         perfiles!usuario_id ( nombre_completo ),
@@ -91,9 +88,9 @@ export const incidentesService = {
         nota_alcaldia: item.nota_alcaldia,
         departamento_id: item.departamento_id,
         departamento_nombre: item.departamentos?.nombre || null,
+        zona_nombre: item.calles?.zonas?.nombre || "Cala Cala",
         calle_id: item.calles?.id,
         calle_nombre: item.calles?.nombre || "Vía no especificada",
-        // Coordenadas numéricas directas de la tabla calles
         lat: item.calles?.latitud != null ? Number(item.calles.latitud) : null,
         lng:
           item.calles?.longitud != null ? Number(item.calles.longitud) : null,
@@ -115,9 +112,10 @@ export const incidentesService = {
 
     const incId = Number(incidenteId);
 
+    // Consulta adaptada a la clave compuesta real (usuario_id)
     const { data: existentes, error: consultaErr } = await supabase
       .from("apoyos_incidente")
-      .select("id")
+      .select("usuario_id")
       .eq("incidente_id", incId)
       .eq("usuario_id", usuarioId);
 
@@ -155,7 +153,6 @@ export const incidentesService = {
       urlPublicaFoto = await this.subirACloudinary(fotoLocalUri);
     }
 
-    // Ya no se inserta google_maps_url aquí; reside en la tabla calles
     const { data, error } = await supabase
       .from("incidentes")
       .insert([

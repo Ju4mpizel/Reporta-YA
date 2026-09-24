@@ -1,12 +1,11 @@
 // src/components/CustomTabBar.js
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   TouchableOpacity,
   StyleSheet,
   Animated,
   Platform,
-  Dimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -20,19 +19,29 @@ import { COLORS } from "../constants/theme";
 
 export default function CustomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();
-  const totalTabs = state.routes.length;
 
-  // Valor animado que interpola la posición horizontal de la pastilla activa
-  const animIndex = useRef(new Animated.Value(state.index)).current;
+  // Guardamos las coordenadas X exactas de cada icono
+  const [posicionesX, setPosicionesX] = useState({});
+  const containerBarraRef = useRef(null);
 
+  // Valor animado horizontal que desliza la pastilla
+  const translateXAnim = useRef(new Animated.Value(0)).current;
+
+  // Animar hacia la posición exacta del icono seleccionado
   useEffect(() => {
-    Animated.spring(animIndex, {
-      toValue: state.index,
-      friction: 6,
-      tension: 90,
-      useNativeDriver: Platform.OS !== "web",
-    }).start();
-  }, [state.index]);
+    const destinoX = posicionesX[state.index];
+    if (destinoX !== undefined) {
+      Animated.spring(translateXAnim, {
+        toValue: destinoX,
+        friction: 7,
+        tension: 90,
+        useNativeDriver: Platform.OS !== "web",
+      }).start();
+    }
+  }, [state.index, posicionesX]);
+
+  // Si se selecciona el botón de acción (+), ocultamos la pastilla
+  const esBotonReportar = state.routes[state.index]?.name === "Reportar";
 
   return (
     <View
@@ -41,28 +50,20 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
         { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 },
       ]}
     >
-      <View style={styles.barContainer}>
-        {/* Pastilla indicadora activa deslizante */}
-        <Animated.View
-          style={[
-            styles.activeIndicator,
-            {
-              width: `${100 / totalTabs}%`,
-              transform: [
-                {
-                  translateX: animIndex.interpolate({
-                    inputRange: state.routes.map((_, i) => i),
-                    outputRange: state.routes.map(
-                      (_, i) => (i * 350) / totalTabs, // Se autoajusta proporcionalmente
-                    ),
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          <View style={styles.activePillShape} />
-        </Animated.View>
+      <View style={styles.barContainer} ref={containerBarraRef}>
+        {/* Pastilla indicadora animada que se desliza concéntricamente */}
+        {!esBotonReportar && posicionesX[state.index] !== undefined && (
+          <Animated.View
+            style={[
+              styles.activeIndicator,
+              {
+                transform: [{ translateX: translateXAnim }],
+              },
+            ]}
+          >
+            <View style={styles.activePillShape} />
+          </Animated.View>
+        )}
 
         {state.routes.map((route, index) => {
           const isFocused = state.index === index;
@@ -80,20 +81,6 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             }
           };
 
-          if (isAction) {
-            return (
-              <View key={route.key} style={styles.navSlot}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={onPress}
-                  style={styles.actionBox}
-                >
-                  <Plus size={22} color="#FFFFFF" strokeWidth={2.8} />
-                </TouchableOpacity>
-              </View>
-            );
-          }
-
           let Icon = ClipboardList;
           if (route.name === "Mapa") Icon = MapPin;
           if (route.name === "Incidentes") Icon = ClipboardList;
@@ -102,20 +89,46 @@ export default function CustomTabBar({ state, descriptors, navigation }) {
             Icon = ShieldAlert;
 
           return (
-            <TouchableOpacity
-              key={route.key}
-              activeOpacity={0.7}
-              onPress={onPress}
-              style={styles.navSlot}
-            >
-              <View style={styles.iconContainer}>
-                <Icon
-                  size={21}
-                  color={isFocused ? COLORS.primary : "#94A3B8"}
-                  strokeWidth={isFocused ? 2.6 : 1.9}
-                />
-              </View>
-            </TouchableOpacity>
+            <View key={route.key} style={styles.navSlot}>
+              {isAction ? (
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={onPress}
+                  style={styles.actionBox}
+                >
+                  <Plus size={22} color="#FFFFFF" strokeWidth={2.8} />
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={onPress}
+                  style={styles.iconContainer}
+                  onLayout={(e) => {
+                    // Obtenemos las coordenadas directas del botón donde vive el icono
+                    if (containerBarraRef.current && e.target) {
+                      e.target.measureLayout(
+                        containerBarraRef.current,
+                        (left) => {
+                          setPosicionesX((prev) => ({
+                            ...prev,
+                            [index]: left,
+                          }));
+                        },
+                        () => {},
+                      );
+                    }
+                  }}
+                >
+                  <View style={styles.svgWrapper}>
+                    <Icon
+                      size={22}
+                      color={isFocused ? COLORS.primary : "#94A3B8"}
+                      strokeWidth={isFocused ? 2.5 : 1.9}
+                    />
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
           );
         })}
       </View>
@@ -140,7 +153,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: "#E2E8F0",
     elevation: 8,
@@ -148,13 +161,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    overflow: "hidden",
   },
   activeIndicator: {
     position: "absolute",
-    height: "100%",
     top: 0,
+    bottom: 0,
     left: 0,
+    width: 44,
+    height: "100%",
     justifyContent: "center",
     alignItems: "center",
     zIndex: 0,
@@ -173,8 +187,15 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   iconContainer: {
-    width: 42,
-    height: 42,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  // Contenedor estricto para asegurar centrado óptico del SVG
+  svgWrapper: {
+    width: 24,
+    height: 24,
     alignItems: "center",
     justifyContent: "center",
   },

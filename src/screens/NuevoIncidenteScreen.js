@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Modal,
   Animated,
   Platform,
   Image,
@@ -23,10 +22,8 @@ import {
   Check,
   Send,
   Lock,
-  CheckCircle2,
   Camera,
   X,
-  WifiOff,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import NetInfo from "@react-native-community/netinfo";
@@ -34,6 +31,7 @@ import { supabase } from "../services/supabase";
 import { CrearIncidenteCommand } from "../services/commands/CrearIncidenteCommand";
 import { commandQueueService } from "../services/CommandQueueService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
+import CustomModalAlert from "../components/CustomModalAlert";
 import { useAuth } from "../context/AuthContext";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
@@ -55,9 +53,14 @@ export default function NuevoIncidenteScreen({ navigation }) {
   const [imagenUri, setImagenUri] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
-  // Estados dinámicos para el Modal de respuesta
-  const [modalExitoVisible, setModalExitoVisible] = useState(false);
-  const [modalOffline, setModalOffline] = useState(false);
+  // Estado unificado de Alertas
+  const [alerta, setAlerta] = useState({
+    visible: false,
+    tipo: "exito",
+    titulo: "",
+    mensaje: "",
+    onConfirmar: null,
+  });
 
   const animFade = useRef(new Animated.Value(0)).current;
 
@@ -128,7 +131,14 @@ export default function NuevoIncidenteScreen({ navigation }) {
     try {
       const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permiso.granted) {
-        alert("Se requiere permiso para acceder a la galería.");
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Permiso Denegado",
+          mensaje:
+            "Se requiere permiso para acceder a la galería y adjuntar fotografías evidenciales.",
+          onConfirmar: null,
+        });
         return;
       }
 
@@ -157,16 +167,33 @@ export default function NuevoIncidenteScreen({ navigation }) {
     setAcordeonAbierto("zona");
   };
 
-  // --- IMPLEMENTACIÓN DEL PATRÓN COMMAND ---
   async function handleGuardar() {
-    if (!zonaSeleccionada || !calleSeleccionada || !categoriaSeleccionada)
+    if (!zonaSeleccionada || !calleSeleccionada || !categoriaSeleccionada) {
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Pasos Incompletos",
+        mensaje:
+          "Por favor selecciona la zona, calle y categoría del problema.",
+        onConfirmar: null,
+      });
       return;
-    if (!titulo.trim() || !descripcion.trim()) return;
+    }
+    if (!titulo.trim() || !descripcion.trim()) {
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Detalles Requeridos",
+        mensaje:
+          "Debes ingresar un título y la descripción detallada del problema.",
+        onConfirmar: null,
+      });
+      return;
+    }
 
     try {
       setEnviando(true);
 
-      // 1. Instanciamos el objeto Command encapsulando los datos del reporte
       const comando = new CrearIncidenteCommand({
         usuarioId: perfil?.id,
         calleId: calleSeleccionada.id,
@@ -177,35 +204,46 @@ export default function NuevoIncidenteScreen({ navigation }) {
         fotoLocalUri: imagenUri || null,
       });
 
-      // 2. Evaluamos la conectividad del dispositivo
       const netState = await NetInfo.fetch();
       const hayInternet = Boolean(
         netState.isConnected && netState.isInternetReachable !== false,
       );
 
       if (hayInternet) {
-        // En línea: Ejecución directa del comando
         await comando.execute();
-        setModalOffline(false);
+        limpiarFormulario();
+        setAlerta({
+          visible: true,
+          tipo: "exito",
+          titulo: "¡Reporte Registrado!",
+          mensaje:
+            "Tu reporte fue transmitido exitosamente al servidor distrital. Los vecinos y la Subalcaldía podrán darle seguimiento.",
+          onConfirmar: () => navigation.navigate("Incidentes"),
+        });
       } else {
-        // Sin conexión: Encolamos el comando para su ejecución posterior
         await commandQueueService.encolar(comando);
-        setModalOffline(true);
+        limpiarFormulario();
+        setAlerta({
+          visible: true,
+          tipo: "info",
+          titulo: "Reporte Guardado en Cola",
+          mensaje:
+            "Sin conexión a internet en este momento. Tu reporte fue almacenado localmente y se enviará de forma automática al restablecerse la red.",
+          onConfirmar: () => navigation.navigate("Incidentes"),
+        });
       }
-
-      limpiarFormulario();
-      setModalExitoVisible(true);
     } catch (err) {
-      console.error("Error al procesar el reporte:", err.message);
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Error al enviar",
+        mensaje: err.message || "No se pudo procesar el reporte.",
+        onConfirmar: null,
+      });
     } finally {
       setEnviando(false);
     }
   }
-
-  const handleCerrarModal = () => {
-    setModalExitoVisible(false);
-    navigation.navigate("Incidentes");
-  };
 
   const pasoCalleBloqueado = !zonaSeleccionada;
   const pasoCategoriaBloqueado = !calleSeleccionada;
@@ -644,57 +682,18 @@ export default function NuevoIncidenteScreen({ navigation }) {
         </Animated.View>
       </ScrollView>
 
-      {/* MODAL INSTITUCIONAL (EN LÍNEA O EN COLA OFFLINE) */}
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={modalExitoVisible}
-        onRequestClose={handleCerrarModal}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFillObject}
-            activeOpacity={1}
-            onPress={handleCerrarModal}
-          />
-          <View style={styles.modalContent}>
-            <View style={styles.modalDragHandle} />
-
-            {modalOffline ? (
-              <View style={styles.modalIconWrapAmber}>
-                <WifiOff size={30} color="#D97706" strokeWidth={2.4} />
-              </View>
-            ) : (
-              <View style={styles.modalIconWrapGreen}>
-                <CheckCircle2 size={32} color="#16A34A" strokeWidth={2.4} />
-              </View>
-            )}
-
-            <Text style={styles.modalTitle}>
-              {modalOffline
-                ? "Reporte Guardado en Cola"
-                : "¡Reporte Registrado!"}
-            </Text>
-
-            <Text style={styles.modalDesc}>
-              {modalOffline
-                ? "Sin conexión a internet en este momento. Tu reporte fue almacenado localmente mediante Command y se enviará de forma automática al restablecerse la red."
-                : "Tu reporte fue transmitido exitosamente al servidor distrital. Los vecinos y la Subalcaldía podrán darle seguimiento."}
-            </Text>
-
-            <TouchableOpacity
-              style={[
-                styles.btnModalConfirm,
-                modalOffline ? styles.btnModalAmber : styles.btnModalDark,
-              ]}
-              activeOpacity={0.8}
-              onPress={handleCerrarModal}
-            >
-              <Text style={styles.btnModalConfirmText}>Entendido</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* Alerta Institucional Reutilizable */}
+      <CustomModalAlert
+        visible={alerta.visible}
+        tipo={alerta.tipo}
+        titulo={alerta.titulo}
+        mensaje={alerta.mensaje}
+        onConfirmar={() => {
+          const accion = alerta.onConfirmar;
+          setAlerta((prev) => ({ ...prev, visible: false }));
+          if (accion) accion();
+        }}
+      />
     </View>
   );
 }
@@ -862,80 +861,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 11.5,
     fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-
-  /* Modales */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: RADIUS.xl,
-    borderTopRightRadius: RADIUS.xl,
-    padding: SPACING.xl,
-    alignItems: "center",
-    borderTopWidth: 1,
-    borderColor: COLORS.borderLight,
-  },
-  modalDragHandle: {
-    width: 36,
-    height: 4,
-    backgroundColor: "#E2E8F0",
-    borderRadius: 2,
-    marginBottom: SPACING.md,
-  },
-  modalIconWrapGreen: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#DCFCE7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.sm,
-  },
-  modalIconWrapAmber: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: "#FEF3C7",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.sm,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "900",
-    color: COLORS.textDark,
-  },
-  modalDesc: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: SPACING.lg,
-    lineHeight: 18,
-    paddingHorizontal: 8,
-  },
-  btnModalConfirm: {
-    width: "100%",
-    paddingVertical: 13,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-  },
-  btnModalDark: {
-    backgroundColor: COLORS.primaryDark,
-  },
-  btnModalAmber: {
-    backgroundColor: "#D97706",
-  },
-  btnModalConfirmText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#FFFFFF",
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
