@@ -7,14 +7,18 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import NetInfo from "@react-native-community/netinfo";
 import { useAuth } from "../context/AuthContext";
 import { incidentesService } from "../services/incidentesService";
+import { commandQueueService } from "../services/CommandQueueService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
 import FiltrosAcordeon from "../components/FiltrosAcordeon";
 import IncidenteCard from "../components/IncidenteCard";
 import CustomModalAlert from "../components/CustomModalAlert";
+import OfflineEmptyState from "../components/OfflineEmptyState";
 import { COLORS, SPACING } from "../constants/theme";
 
 export default function IncidenteScreen({ route, navigation }) {
@@ -25,6 +29,7 @@ export default function IncidenteScreen({ route, navigation }) {
   const [incidentes, setIncidentes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
+  const [errorConexion, setErrorConexion] = useState(false);
 
   // Filtros dinámicos con "Todas" por defecto
   const [zonaFiltro, setZonaFiltro] = useState("Todas");
@@ -46,14 +51,47 @@ export default function IncidenteScreen({ route, navigation }) {
   );
 
   useEffect(() => {
-    const cancelarSuscripcion = incidentesService.suscribirACambios(() => {
+    // 1. Escuchar cambios en tiempo real de Supabase
+    const cancelarSuscripcionSupabase = incidentesService.suscribirACambios(
+      () => {
+        cargarIncidentes();
+      },
+    );
+
+    // 2. Escuchar la sincronización reactiva del CommandQueue (cuando se despachan reportes offline)
+    const cancelarSuscripcionQueue = commandQueueService.suscribir((evento) => {
+      if (evento === "COMANDO_EJECUTADO") {
+        cargarIncidentes();
+      }
+    });
+
+    // 3. Listener nativo de reconexión física de red (Web y Mobile)
+    const handleReconexion = () => {
       cargarIncidentes();
+    };
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.addEventListener("online", handleReconexion);
+    }
+
+    const desuscribirNet = NetInfo.addEventListener((state) => {
+      const hayRed = Boolean(
+        state.isConnected && state.isInternetReachable !== false,
+      );
+      if (hayRed) {
+        cargarIncidentes();
+      }
     });
 
     return () => {
-      cancelarSuscripcion();
+      cancelarSuscripcionSupabase();
+      cancelarSuscripcionQueue();
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.removeEventListener("online", handleReconexion);
+      }
+      desuscribirNet();
     };
-  }, []);
+  }, [perfil?.id]);
 
   useEffect(() => {
     if (incidenteIdSeleccionado && incidentes.length > 0) {
@@ -82,10 +120,21 @@ export default function IncidenteScreen({ route, navigation }) {
   async function cargarIncidentes() {
     try {
       setCargando(true);
+      setErrorConexion(false);
       const datos = await incidentesService.obtenerParaFeed(perfil?.id);
       setIncidentes(datos);
     } catch (err) {
-      console.error("Error al cargar incidentes:", err.message);
+      console.warn("Aviso al cargar incidentes:", err.message);
+      const esErrorDeRed =
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network") ||
+        (Platform.OS === "web" &&
+          typeof navigator !== "undefined" &&
+          !navigator.onLine);
+
+      if (esErrorDeRed) {
+        setErrorConexion(true);
+      }
     } finally {
       setCargando(false);
       setRefrescando(false);
@@ -104,6 +153,7 @@ export default function IncidenteScreen({ route, navigation }) {
   });
 
   const handleApoyar = async (incidenteId) => {
+    // 1. Verificación de sesión
     if (!perfil?.id) {
       setAlerta({
         visible: true,
@@ -111,6 +161,30 @@ export default function IncidenteScreen({ route, navigation }) {
         titulo: "Acceso Requerido",
         mensaje:
           "Debes iniciar sesión con tu carnet de identidad para respaldar este reporte.",
+      });
+      return;
+    }
+
+    // 2. Verificación estricta de conexión a internet
+    let conexionEstable = true;
+    if (Platform.OS === "web" && typeof navigator !== "undefined") {
+      conexionEstable = navigator.onLine === true;
+    }
+
+    if (conexionEstable) {
+      const netState = await NetInfo.fetch();
+      conexionEstable = Boolean(
+        netState.isConnected && netState.isInternetReachable !== false,
+      );
+    }
+
+    if (!conexionEstable) {
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Sin Conexión",
+        mensaje:
+          "No tienes conexión a internet para respaldar reportes en este momento. Inténtalo cuando recuperes la red.",
       });
       return;
     }
@@ -133,12 +207,29 @@ export default function IncidenteScreen({ route, navigation }) {
         }),
       );
     } catch (err) {
-      setAlerta({
-        visible: true,
-        tipo: "error",
-        titulo: "Aviso",
-        mensaje: err.message,
-      });
+      const esErrorDeRed =
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network") ||
+        (Platform.OS === "web" &&
+          typeof navigator !== "undefined" &&
+          !navigator.onLine);
+
+      if (esErrorDeRed) {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Sin Conexión",
+          mensaje:
+            "No tienes conexión a internet para respaldar reportes en este momento. Inténtalo cuando recuperes la red.",
+        });
+      } else {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Aviso",
+          mensaje: err.message || "No se pudo registrar tu respaldo.",
+        });
+      }
     }
   };
 
@@ -155,13 +246,19 @@ export default function IncidenteScreen({ route, navigation }) {
         onPressCategoria={(cat) => setCategoriaFiltro(cat)}
       />
 
-      {cargando ? (
+      {cargando && incidentes.length === 0 ? (
         <View style={styles.centerContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>
             Cargando incidentes distritales...
           </Text>
         </View>
+      ) : errorConexion && incidentes.length === 0 ? (
+        <OfflineEmptyState
+          titulo="Modo fuera de línea"
+          mensaje="No fue posible conectar con el servidor municipal para cargar los reportes. Los incidentes que envíes se guardarán localmente."
+          onReintentar={cargarIncidentes}
+        />
       ) : (
         <FlatList
           ref={flatListRef}

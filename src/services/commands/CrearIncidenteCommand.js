@@ -11,12 +11,10 @@ export class CrearIncidenteCommand {
     this.timestamp = payload.timestamp || Date.now();
   }
 
-  // Método estándar de ejecución del patrón Command
   async execute() {
     return await incidentesService.crear(this.payload);
   }
 
-  // Permite serializar el comando para guardarlo en AsyncStorage
   toJSON() {
     return {
       id: this.id,

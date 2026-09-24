@@ -1,6 +1,6 @@
 // src/components/NetworkBanner.js
 import React, { useState, useEffect, useRef } from "react";
-import { StyleSheet, Text, Animated, View } from "react-native";
+import { StyleSheet, Text, Animated, View, Platform } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { WifiOff, Wifi, CheckCircle2 } from "lucide-react-native";
 import { commandQueueService } from "../services/CommandQueueService";
@@ -13,7 +13,6 @@ export default function NetworkBanner() {
   });
 
   const estabaDesconectadoRef = useRef(false);
-  const esPrimeraEvaluacionRef = useRef(true);
   const animY = useRef(new Animated.Value(-70)).current;
   const timeoutOcultarRef = useRef(null);
 
@@ -25,7 +24,7 @@ export default function NetworkBanner() {
     Animated.timing(animY, {
       toValue: 0,
       duration: 300,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start();
 
     if (autoOcultarSegundos) {
@@ -39,55 +38,67 @@ export default function NetworkBanner() {
     Animated.timing(animY, {
       toValue: -70,
       duration: 300,
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== "web",
     }).start(() => {
       setEstadoBanner((prev) => ({ ...prev, visible: false }));
     });
   };
 
   useEffect(() => {
-    // 1. Escuchar estado físico de la conexión a internet
-    const desuscribirNet = NetInfo.addEventListener((state) => {
-      const conectadoActual = Boolean(
-        state.isConnected && state.isInternetReachable !== false,
-      );
-
-      if (esPrimeraEvaluacionRef.current) {
-        esPrimeraEvaluacionRef.current = false;
-        if (!conectadoActual) {
-          estabaDesconectadoRef.current = true;
-          mostrarAviso(
-            "offline",
-            "Sin conexión a internet. Modo fuera de línea.",
-          );
-        }
-        return;
-      }
-
-      if (!conectadoActual) {
+    const evaluarConexion = (conectado) => {
+      if (!conectado) {
         estabaDesconectadoRef.current = true;
         mostrarAviso(
           "offline",
           "Sin conexión a internet. Modo fuera de línea.",
         );
-      } else if (conectadoActual && estabaDesconectadoRef.current) {
+      } else if (conectado && estabaDesconectadoRef.current) {
         estabaDesconectadoRef.current = false;
         mostrarAviso("online", "Se restableció la conexión a internet.", 3);
+        commandQueueService.procesarCola();
       }
+    };
+
+    // 1. Escucha en Web (Eventos estándar del navegador)
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const handleWebOffline = () => evaluarConexion(false);
+      const handleWebOnline = () => evaluarConexion(true);
+
+      window.addEventListener("offline", handleWebOffline);
+      window.addEventListener("online", handleWebOnline);
+
+      if (navigator.onLine === false) {
+        evaluarConexion(false);
+      }
+    }
+
+    // 2. Escucha nativa / NetInfo
+    const desuscribirNet = NetInfo.addEventListener((state) => {
+      const haySalida = Boolean(
+        state.isConnected && state.isInternetReachable !== false,
+      );
+      evaluarConexion(haySalida);
     });
 
-    // 2. Escuchar la ejecución reactiva del patrón Command
+    // 3. Notificación reactiva al sincronizar comandos pendientes
     const desuscribirQueue = commandQueueService.suscribir((evento, datos) => {
       if (evento === "COMANDO_EJECUTADO") {
-        mostrarAviso(
-          "sincronizado",
-          `Reporte sincronizado: "${datos.titulo || "Incidente"}"`,
-          4,
-        );
+        const esDictamen =
+          datos.tipo === "DICTAMINAR_INCIDENTE" ||
+          Boolean(datos.nota_alcaldia !== undefined);
+        const mensaje = esDictamen
+          ? `Expediente actualizado: "${datos.titulo || "Dictamen municipal"}"`
+          : `Reporte sincronizado: "${datos.titulo || "Incidente"}"`;
+
+        mostrarAviso("sincronizado", mensaje, 4);
       }
     });
 
     return () => {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.removeEventListener("offline", () => evaluarConexion(false));
+        window.removeEventListener("online", () => evaluarConexion(true));
+      }
       desuscribirNet();
       desuscribirQueue();
       if (timeoutOcultarRef.current) clearTimeout(timeoutOcultarRef.current);
@@ -139,13 +150,13 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   bannerOffline: {
-    backgroundColor: "#DC2626", // Rojo alerta
+    backgroundColor: "#DC2626",
   },
   bannerOnline: {
-    backgroundColor: "#16A34A", // Verde conexión
+    backgroundColor: "#16A34A",
   },
   bannerSincronizado: {
-    backgroundColor: "#0284C7", // Azul institucional de sincronización
+    backgroundColor: "#0284C7",
   },
   contenido: {
     flexDirection: "row",

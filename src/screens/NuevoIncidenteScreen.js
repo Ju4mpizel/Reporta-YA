@@ -1,5 +1,5 @@
 // src/screens/NuevoIncidenteScreen.js
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   StyleSheet,
   Text,
@@ -24,10 +24,11 @@ import {
   Lock,
   Camera,
   X,
+  RefreshCw,
 } from "lucide-react-native";
 import * as ImagePicker from "expo-image-picker";
 import NetInfo from "@react-native-community/netinfo";
-import { supabase } from "../services/supabase";
+import { catalogoService } from "../services/catalogoService";
 import { CrearIncidenteCommand } from "../services/commands/CrearIncidenteCommand";
 import { commandQueueService } from "../services/CommandQueueService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
@@ -42,6 +43,8 @@ export default function NuevoIncidenteScreen({ navigation }) {
   const [calles, setCalles] = useState([]);
   const [categorias, setCategorias] = useState([]);
   const [cargando, setCargando] = useState(true);
+  const [cargandoZonas, setCargandoZonas] = useState(false);
+  const [cargandoCalles, setCargandoCalles] = useState(false);
 
   const [acordeonAbierto, setAcordeonAbierto] = useState("zona");
 
@@ -53,7 +56,6 @@ export default function NuevoIncidenteScreen({ navigation }) {
   const [imagenUri, setImagenUri] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
-  // Estado unificado de Alertas
   const [alerta, setAlerta] = useState({
     visible: false,
     tipo: "exito",
@@ -76,6 +78,36 @@ export default function NuevoIncidenteScreen({ navigation }) {
     cargarDatosIniciales();
   }, []);
 
+  // Recarga reactiva cuando se recupera la conexión a internet
+  useEffect(() => {
+    const handleReconexion = () => {
+      cargarDatosIniciales();
+      if (zonaSeleccionada) {
+        cargarCallesDeZona(zonaSeleccionada.id);
+      }
+    };
+
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      window.addEventListener("online", handleReconexion);
+    }
+
+    const desuscribirNet = NetInfo.addEventListener((state) => {
+      const hayRed = Boolean(
+        state.isConnected && state.isInternetReachable !== false,
+      );
+      if (hayRed) {
+        handleReconexion();
+      }
+    });
+
+    return () => {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.removeEventListener("online", handleReconexion);
+      }
+      desuscribirNet();
+    };
+  }, [zonaSeleccionada]);
+
   useEffect(() => {
     if (zonaSeleccionada) {
       cargarCallesDeZona(zonaSeleccionada.id);
@@ -87,40 +119,35 @@ export default function NuevoIncidenteScreen({ navigation }) {
 
   async function cargarDatosIniciales() {
     try {
-      setCargando(true);
-      const [resZonas, resCats] = await Promise.all([
-        supabase.from("zonas").select("id, nombre, distrito").order("nombre"),
-        supabase
-          .from("categorias_incidente")
-          .select("id, nombre")
-          .order("nombre"),
+      setCargandoZonas(true);
+      const [listaZonas, listaCats] = await Promise.all([
+        catalogoService.obtenerZonas(),
+        catalogoService.obtenerCategorias(),
       ]);
 
-      if (resZonas.data) setZonas(resZonas.data);
-      if (resCats.data) setCategorias(resCats.data);
+      if (listaZonas && listaZonas.length > 0) setZonas(listaZonas);
+      if (listaCats && listaCats.length > 0) setCategorias(listaCats);
     } catch (err) {
-      console.error("Error al cargar datos:", err);
+      console.warn("Aviso carga catálogo:", err.message);
     } finally {
       setCargando(false);
+      setCargandoZonas(false);
     }
   }
 
-  async function cargarCallesDeZona(zonaId) {
+  const cargarCallesDeZona = useCallback(async (zonaId) => {
+    if (!zonaId) return;
     try {
-      const { data, error } = await supabase
-        .from("calles")
-        .select("id, nombre, tipo, google_maps_url")
-        .eq("zona_id", zonaId)
-        .order("nombre");
-
-      if (error) throw error;
-      setCalles(data || []);
-      setCalleSeleccionada(null);
+      setCargandoCalles(true);
+      const listaCalles = await catalogoService.obtenerCallesPorZona(zonaId);
+      setCalles(listaCalles || []);
     } catch (err) {
-      console.error("Error al cargar calles:", err);
+      console.warn("Aviso carga calles:", err.message);
       setCalles([]);
+    } finally {
+      setCargandoCalles(false);
     }
-  }
+  }, []);
 
   const toggleAcordeon = (seccion, bloqueado) => {
     if (bloqueado) return;
@@ -191,25 +218,32 @@ export default function NuevoIncidenteScreen({ navigation }) {
       return;
     }
 
+    const comando = new CrearIncidenteCommand({
+      usuarioId: perfil?.id,
+      calleId: calleSeleccionada.id,
+      categoriaId: categoriaSeleccionada.id,
+      titulo: titulo.trim(),
+      descripcion: descripcion.trim(),
+      mapsUrl: calleSeleccionada.google_maps_url || null,
+      fotoLocalUri: imagenUri || null,
+    });
+
     try {
       setEnviando(true);
 
-      const comando = new CrearIncidenteCommand({
-        usuarioId: perfil?.id,
-        calleId: calleSeleccionada.id,
-        categoriaId: categoriaSeleccionada.id,
-        titulo: titulo.trim(),
-        descripcion: descripcion.trim(),
-        mapsUrl: calleSeleccionada.google_maps_url || null,
-        fotoLocalUri: imagenUri || null,
-      });
+      let tieneInternet = true;
+      if (Platform.OS === "web" && typeof navigator !== "undefined") {
+        tieneInternet = navigator.onLine === true;
+      }
 
-      const netState = await NetInfo.fetch();
-      const hayInternet = Boolean(
-        netState.isConnected && netState.isInternetReachable !== false,
-      );
+      if (tieneInternet) {
+        const netState = await NetInfo.fetch();
+        tieneInternet = Boolean(
+          netState.isConnected && netState.isInternetReachable !== false,
+        );
+      }
 
-      if (hayInternet) {
+      if (tieneInternet) {
         await comando.execute();
         limpiarFormulario();
         setAlerta({
@@ -233,13 +267,34 @@ export default function NuevoIncidenteScreen({ navigation }) {
         });
       }
     } catch (err) {
-      setAlerta({
-        visible: true,
-        tipo: "error",
-        titulo: "Error al enviar",
-        mensaje: err.message || "No se pudo procesar el reporte.",
-        onConfirmar: null,
-      });
+      const esErrorDeRed =
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network") ||
+        err.message?.toLowerCase().includes("fetch") ||
+        (Platform.OS === "web" &&
+          typeof navigator !== "undefined" &&
+          !navigator.onLine);
+
+      if (esErrorDeRed) {
+        await commandQueueService.encolar(comando);
+        limpiarFormulario();
+        setAlerta({
+          visible: true,
+          tipo: "info",
+          titulo: "Reporte Guardado en Cola",
+          mensaje:
+            "No se detectó salida a internet durante el envío. Tu reporte fue almacenado localmente y se enviará de forma automática al recuperar la conexión.",
+          onConfirmar: () => navigation.navigate("Incidentes"),
+        });
+      } else {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Error al enviar",
+          mensaje: err.message || "No se pudo procesar el reporte.",
+          onConfirmar: null,
+        });
+      }
     } finally {
       setEnviando(false);
     }
@@ -297,36 +352,65 @@ export default function NuevoIncidenteScreen({ navigation }) {
 
             {acordeonAbierto === "zona" && (
               <View style={styles.accordionBody}>
-                {zonas.map((z) => {
-                  const activa = zonaSeleccionada?.id === z.id;
-                  return (
+                {cargandoZonas ? (
+                  <View style={styles.loadingBoxSmall}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.loadingTextSmall}>
+                      Cargando zonas del Distrito 12...
+                    </Text>
+                  </View>
+                ) : zonas.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyNote}>
+                      No se encontraron zonas en caché local.
+                    </Text>
                     <TouchableOpacity
-                      key={z.id}
-                      style={[
-                        styles.optionItem,
-                        activa && styles.optionItemActive,
-                      ]}
-                      onPress={() => {
-                        setZonaSeleccionada(z);
-                        setAcordeonAbierto("calle");
-                      }}
+                      style={styles.btnRetrySmall}
+                      onPress={cargarDatosIniciales}
+                      activeOpacity={0.7}
                     >
-                      <View style={styles.optionContent}>
-                        {activa && (
-                          <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
-                        )}
-                        <Text
-                          style={[
-                            styles.optionText,
-                            activa && styles.optionTextActive,
-                          ]}
-                        >
-                          {z.nombre} (Distrito {z.distrito})
-                        </Text>
-                      </View>
+                      <RefreshCw size={12} color={COLORS.primary} />
+                      <Text style={styles.btnRetrySmallText}>
+                        Reintentar carga de zonas
+                      </Text>
                     </TouchableOpacity>
-                  );
-                })}
+                  </View>
+                ) : (
+                  zonas.map((z) => {
+                    const activa = zonaSeleccionada?.id === z.id;
+                    return (
+                      <TouchableOpacity
+                        key={z.id}
+                        style={[
+                          styles.optionItem,
+                          activa && styles.optionItemActive,
+                        ]}
+                        onPress={() => {
+                          setZonaSeleccionada(z);
+                          setAcordeonAbierto("calle");
+                        }}
+                      >
+                        <View style={styles.optionContent}>
+                          {activa && (
+                            <Check
+                              size={14}
+                              color="#FFFFFF"
+                              strokeWidth={2.5}
+                            />
+                          )}
+                          <Text
+                            style={[
+                              styles.optionText,
+                              activa && styles.optionTextActive,
+                            ]}
+                          >
+                            {z.nombre} (Distrito {z.distrito})
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
               </View>
             )}
           </View>
@@ -389,10 +473,29 @@ export default function NuevoIncidenteScreen({ navigation }) {
 
             {acordeonAbierto === "calle" && !pasoCalleBloqueado && (
               <View style={styles.accordionBody}>
-                {calles.length === 0 ? (
-                  <Text style={styles.emptyNote}>
-                    No hay vías registradas en esta zona.
-                  </Text>
+                {cargandoCalles ? (
+                  <View style={styles.loadingBoxSmall}>
+                    <ActivityIndicator size="small" color={COLORS.primary} />
+                    <Text style={styles.loadingTextSmall}>
+                      Cargando vías de {zonaSeleccionada?.nombre}...
+                    </Text>
+                  </View>
+                ) : calles.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyNote}>
+                      No hay vías guardadas en local para esta zona.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.btnRetrySmall}
+                      onPress={() => cargarCallesDeZona(zonaSeleccionada?.id)}
+                      activeOpacity={0.7}
+                    >
+                      <RefreshCw size={12} color={COLORS.primary} />
+                      <Text style={styles.btnRetrySmallText}>
+                        Reintentar carga de calles
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 ) : (
                   calles.map((c) => {
                     const activa = calleSeleccionada?.id === c.id;
@@ -493,36 +596,58 @@ export default function NuevoIncidenteScreen({ navigation }) {
 
             {acordeonAbierto === "categoria" && !pasoCategoriaBloqueado && (
               <View style={styles.accordionBody}>
-                {categorias.map((cat) => {
-                  const activa = categoriaSeleccionada?.id === cat.id;
-                  return (
+                {categorias.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyNote}>
+                      No se encontraron categorías en local.
+                    </Text>
                     <TouchableOpacity
-                      key={cat.id}
-                      style={[
-                        styles.optionItem,
-                        activa && styles.optionItemActive,
-                      ]}
-                      onPress={() => {
-                        setCategoriaSeleccionada(cat);
-                        setAcordeonAbierto(null);
-                      }}
+                      style={styles.btnRetrySmall}
+                      onPress={cargarDatosIniciales}
+                      activeOpacity={0.7}
                     >
-                      <View style={styles.optionContent}>
-                        {activa && (
-                          <Check size={14} color="#FFFFFF" strokeWidth={2.5} />
-                        )}
-                        <Text
-                          style={[
-                            styles.optionText,
-                            activa && styles.optionTextActive,
-                          ]}
-                        >
-                          {cat.nombre}
-                        </Text>
-                      </View>
+                      <RefreshCw size={12} color={COLORS.primary} />
+                      <Text style={styles.btnRetrySmallText}>
+                        Reintentar categorías
+                      </Text>
                     </TouchableOpacity>
-                  );
-                })}
+                  </View>
+                ) : (
+                  categorias.map((cat) => {
+                    const activa = categoriaSeleccionada?.id === cat.id;
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[
+                          styles.optionItem,
+                          activa && styles.optionItemActive,
+                        ]}
+                        onPress={() => {
+                          setCategoriaSeleccionada(cat);
+                          setAcordeonAbierto(null);
+                        }}
+                      >
+                        <View style={styles.optionContent}>
+                          {activa && (
+                            <Check
+                              size={14}
+                              color="#FFFFFF"
+                              strokeWidth={2.5}
+                            />
+                          )}
+                          <Text
+                            style={[
+                              styles.optionText,
+                              activa && styles.optionTextActive,
+                            ]}
+                          >
+                            {cat.nombre}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
               </View>
             )}
           </View>
@@ -760,11 +885,43 @@ const styles = StyleSheet.create({
   optionContent: { flexDirection: "row", alignItems: "center", gap: 6 },
   optionText: { fontSize: 12, fontWeight: "600", color: COLORS.textDark },
   optionTextActive: { color: "#FFFFFF", fontWeight: "800" },
+  emptyContainer: {
+    padding: SPACING.md,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   emptyNote: {
-    padding: SPACING.sm,
     fontSize: 11,
     color: COLORS.textMuted,
     fontStyle: "italic",
+    textAlign: "center",
+  },
+  btnRetrySmall: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: RADIUS.sm,
+    backgroundColor: "#F0F9FF",
+    borderWidth: 1,
+    borderColor: "#BAE6FD",
+  },
+  btnRetrySmallText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  loadingBoxSmall: {
+    paddingVertical: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+  },
+  loadingTextSmall: {
+    fontSize: 11,
+    color: COLORS.textMuted,
   },
   containerDisabled: { borderColor: "#E2E8F0", backgroundColor: "#F8FAFC" },
   headerDisabled: { backgroundColor: "#F8FAFC" },

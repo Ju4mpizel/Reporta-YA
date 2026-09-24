@@ -9,20 +9,23 @@ import { AuthProvider } from "./src/context/AuthContext";
 import AppNavigator from "./src/navigation/AppNavigator";
 import NetworkBanner from "./src/components/NetworkBanner";
 import { commandQueueService } from "./src/services/CommandQueueService";
+import { catalogoService } from "./src/services/catalogoService";
 
 export default function App() {
   useEffect(() => {
-    // Al abrir la app, si hay red, intentamos vaciar la cola por si quedaron reportes previos
+    // 1. Al abrir la app, intentamos precargar el catálogo en local y vaciar reportes en cola
+    catalogoService.precargarCatalogoCompleto();
     commandQueueService.procesarCola();
 
-    // Listener global de reconexión
+    // 2. Listener global de reconexión
     const desuscribirNet = NetInfo.addEventListener((state) => {
       const hayInternet = Boolean(
         state.isConnected && state.isInternetReachable !== false,
       );
 
       if (hayInternet) {
-        // En cuanto detecta internet, despacha los comandos pendientes en segundo plano
+        // Al recuperar internet, actualiza la caché local del catastro y despacha la cola
+        catalogoService.precargarCatalogoCompleto();
         commandQueueService.procesarCola();
       }
     });

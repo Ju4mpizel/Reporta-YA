@@ -25,8 +25,10 @@ import {
   ExternalLink,
   FileCheck,
 } from "lucide-react-native";
-import { supabase } from "../services/supabase";
-import { incidentesService } from "../services/incidentesService";
+import NetInfo from "@react-native-community/netinfo";
+import { catalogoService } from "../services/catalogoService";
+import { DictaminarIncidenteCommand } from "../services/commands/DictaminarIncidenteCommand";
+import { commandQueueService } from "../services/CommandQueueService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
 import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
@@ -56,7 +58,6 @@ export default function GestionIncidenteScreen({ route, navigation }) {
   const [cargandoDeptos, setCargandoDeptos] = useState(true);
   const [guardando, setGuardando] = useState(false);
 
-  // Alerta personalizada
   const [alerta, setAlerta] = useState({
     visible: false,
     tipo: "exito",
@@ -82,16 +83,10 @@ export default function GestionIncidenteScreen({ route, navigation }) {
   async function cargarDepartamentos() {
     try {
       setCargandoDeptos(true);
-      const { data, error } = await supabase
-        .from("departamentos")
-        .select("id, nombre")
-        .eq("activo", true)
-        .order("id", { ascending: true });
-
-      if (error) throw error;
+      const data = await catalogoService.obtenerDepartamentos();
       setDepartamentos(data || []);
     } catch (err) {
-      console.error("Fallo al cargar departamentos:", err.message);
+      console.warn("Fallo al cargar departamentos:", err.message);
     } finally {
       setCargandoDeptos(false);
     }
@@ -102,31 +97,76 @@ export default function GestionIncidenteScreen({ route, navigation }) {
   };
 
   async function handleGuardar() {
+    const comando = new DictaminarIncidenteCommand({
+      incidenteId: incidente.id,
+      departamentoId: deptoSeleccionado,
+      estado: estadoSeleccionado,
+      notaAlcaldia: notaMunicipal,
+      tituloIncidente: incidente.titulo,
+    });
+
     try {
       setGuardando(true);
 
-      await incidentesService.dictaminar(incidente.id, {
-        departamentoId: deptoSeleccionado,
-        estado: estadoSeleccionado,
-        notaAlcaldia: notaMunicipal,
-      });
+      let tieneInternet = true;
+      if (Platform.OS === "web" && typeof navigator !== "undefined") {
+        tieneInternet = navigator.onLine === true;
+      }
+      if (tieneInternet) {
+        const netState = await NetInfo.fetch();
+        tieneInternet = Boolean(
+          netState.isConnected && netState.isInternetReachable !== false,
+        );
+      }
 
-      setAlerta({
-        visible: true,
-        tipo: "exito",
-        titulo: "¡Expediente Actualizado!",
-        mensaje:
-          "La unidad responsable, el estado y la resolución municipal fueron guardados exitosamente.",
-        onConfirmar: () => navigation.goBack(),
-      });
+      if (tieneInternet) {
+        await comando.execute();
+        setAlerta({
+          visible: true,
+          tipo: "exito",
+          titulo: "¡Expediente Actualizado!",
+          mensaje:
+            "La unidad responsable, el estado y la resolución municipal fueron guardados exitosamente.",
+          onConfirmar: () => navigation.goBack(),
+        });
+      } else {
+        await commandQueueService.encolar(comando);
+        setAlerta({
+          visible: true,
+          tipo: "info",
+          titulo: "Dictamen Guardado en Cola",
+          mensaje:
+            "Sin conexión a internet. La asignación y resolución se guardaron localmente y se actualizarán automáticamente en el servidor municipal.",
+          onConfirmar: () => navigation.goBack(),
+        });
+      }
     } catch (err) {
-      setAlerta({
-        visible: true,
-        tipo: "error",
-        titulo: "Error al dictaminar",
-        mensaje: err.message || "No se pudo actualizar el expediente.",
-        onConfirmar: null,
-      });
+      const esErrorDeRed =
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network") ||
+        (Platform.OS === "web" &&
+          typeof navigator !== "undefined" &&
+          !navigator.onLine);
+
+      if (esErrorDeRed) {
+        await commandQueueService.encolar(comando);
+        setAlerta({
+          visible: true,
+          tipo: "info",
+          titulo: "Dictamen Guardado en Cola",
+          mensaje:
+            "La conexión se interrumpió durante el guardado. Tu resolución fue guardada localmente y se sincronizará automáticamente.",
+          onConfirmar: () => navigation.goBack(),
+        });
+      } else {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Error al dictaminar",
+          mensaje: err.message || "No se pudo actualizar el expediente.",
+          onConfirmar: null,
+        });
+      }
     } finally {
       setGuardando(false);
     }
@@ -163,7 +203,7 @@ export default function GestionIncidenteScreen({ route, navigation }) {
               <View style={styles.badgeJurisdiccion}>
                 <MapPin size={10} color={COLORS.primary} strokeWidth={2.5} />
                 <Text style={styles.summaryCalle}>
-                  {incidente.calle_nombre}
+                  {incidente.calle_nombre || "Vía Registrada"}
                 </Text>
               </View>
 

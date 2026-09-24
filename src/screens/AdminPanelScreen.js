@@ -7,6 +7,7 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Platform,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { incidentesService } from "../services/incidentesService";
@@ -14,12 +15,14 @@ import FiltrosAcordeon from "../components/FiltrosAcordeon";
 import HeaderInstitucional from "../components/HeaderInstitucional";
 import AdminIncidenteCard from "../components/AdminIncidenteCard";
 import CustomModalAlert from "../components/CustomModalAlert";
+import OfflineEmptyState from "../components/OfflineEmptyState";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
 export default function AdminPanelScreen({ navigation }) {
   const [incidentes, setIncidentes] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [refrescando, setRefrescando] = useState(false);
+  const [errorConexion, setErrorConexion] = useState(false);
 
   // Filtros dinámicos con "Todas" por defecto
   const [zonaFiltro, setZonaFiltro] = useState("Todas");
@@ -56,10 +59,22 @@ export default function AdminPanelScreen({ navigation }) {
 
   async function cargarBandeja() {
     try {
+      setCargando(true);
+      setErrorConexion(false);
       const datos = await incidentesService.obtenerParaFeed();
       setIncidentes(Array.isArray(datos) ? datos : []);
     } catch (err) {
       console.error("Error al cargar bandeja admin:", err.message);
+      const esErrorDeRed =
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network") ||
+        (Platform.OS === "web" &&
+          typeof navigator !== "undefined" &&
+          !navigator.onLine);
+
+      if (esErrorDeRed) {
+        setErrorConexion(true);
+      }
     } finally {
       setCargando(false);
       setRefrescando(false);
@@ -176,6 +191,12 @@ export default function AdminPanelScreen({ navigation }) {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Sincronizando expedientes...</Text>
         </View>
+      ) : errorConexion && listaSegura.length === 0 ? (
+        <OfflineEmptyState
+          titulo="Bandeja desconectada"
+          mensaje="No es posible recuperar los expedientes del servidor municipal sin conexión a internet."
+          onReintentar={cargarBandeja}
+        />
       ) : (
         <FlatList
           data={incidentesFiltrados}

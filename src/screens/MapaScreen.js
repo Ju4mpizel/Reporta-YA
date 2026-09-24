@@ -25,11 +25,13 @@ import {
   ChevronRight,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import NetInfo from "@react-native-community/netinfo";
 import { useAuth } from "../context/AuthContext";
 import { incidentesService } from "../services/incidentesService";
 import { callesService } from "../services/callesService";
 import HeaderInstitucional from "../components/HeaderInstitucional";
 import CustomModalAlert from "../components/CustomModalAlert";
+import OfflineEmptyState from "../components/OfflineEmptyState";
 import { COLORS, RADIUS } from "../constants/theme";
 
 const LAT_DEFAULT = -17.3684722;
@@ -38,7 +40,6 @@ const LNG_DEFAULT = -66.1638889;
 export default function MapaScreen({ route, navigation }) {
   const { perfil } = useAuth();
 
-  // Aseguramos el título de la pestaña del navegador web
   useEffect(() => {
     if (Platform.OS === "web" && typeof document !== "undefined") {
       document.title = "Mapa Territorial | Reporta YA!";
@@ -65,6 +66,7 @@ export default function MapaScreen({ route, navigation }) {
   const [incidenteActivo, setIncidenteActivo] = useState(null);
   const [cargando, setCargando] = useState(true);
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [errorConexion, setErrorConexion] = useState(false);
 
   // Zonas de catastro
   const [zonas, setZonas] = useState([]);
@@ -149,6 +151,7 @@ export default function MapaScreen({ route, navigation }) {
   async function cargarIncidentes() {
     try {
       setCargando(true);
+      setErrorConexion(false);
       const datos = await incidentesService.obtenerParaFeed();
       const lista = Array.isArray(datos) ? datos : [];
       setIncidentes(lista);
@@ -173,6 +176,16 @@ export default function MapaScreen({ route, navigation }) {
       }
     } catch (err) {
       console.error("Error al cargar incidentes para Leaflet:", err.message);
+      const esErrorDeRed =
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network") ||
+        (Platform.OS === "web" &&
+          typeof navigator !== "undefined" &&
+          !navigator.onLine);
+
+      if (esErrorDeRed) {
+        setErrorConexion(true);
+      }
     } finally {
       setCargando(false);
     }
@@ -199,6 +212,30 @@ export default function MapaScreen({ route, navigation }) {
   };
 
   const handleGuardarCalle = async () => {
+    // 1. Verificación previa de conexión a internet
+    let conexionActiva = true;
+    if (Platform.OS === "web" && typeof navigator !== "undefined") {
+      conexionActiva = navigator.onLine === true;
+    }
+
+    if (conexionActiva) {
+      const netState = await NetInfo.fetch();
+      conexionActiva = Boolean(
+        netState.isConnected && netState.isInternetReachable !== false,
+      );
+    }
+
+    if (!conexionActiva) {
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Operación no disponible",
+        mensaje:
+          "No tienes conexión a internet. No se pueden registrar nuevas vías en el catastro territorial en modo fuera de línea.",
+      });
+      return;
+    }
+
     if (!nombreNuevaCalle.trim()) {
       setAlerta({
         visible: true,
@@ -239,12 +276,17 @@ export default function MapaScreen({ route, navigation }) {
         mensaje: `La vía "${nombreNuevaCalle}" se guardó correctamente en el catastro municipal.`,
       });
     } catch (err) {
+      const esErrorDeRed =
+        err.message?.toLowerCase().includes("failed to fetch") ||
+        err.message?.toLowerCase().includes("network");
+
       setAlerta({
         visible: true,
         tipo: "error",
-        titulo: "Error al guardar",
-        mensaje:
-          err.message || "No se pudo registrar la calle en la base de datos.",
+        titulo: esErrorDeRed ? "Sin Conexión" : "Error al guardar",
+        mensaje: esErrorDeRed
+          ? "Se perdió la conexión a internet. No se pudo registrar la vía."
+          : err.message || "No se pudo registrar la calle en la base de datos.",
       });
     } finally {
       setGuardandoCalle(false);
@@ -395,6 +437,12 @@ export default function MapaScreen({ route, navigation }) {
             <ActivityIndicator size="large" color={COLORS.primary} />
             <Text style={styles.loadingText}>Conectando con mapa...</Text>
           </View>
+        ) : errorConexion ? (
+          <OfflineEmptyState
+            titulo="Mapa no disponible sin conexión"
+            mensaje="El visor territorial y los mapas de OpenStreetMap requieren conexión a internet para descargar la cartografía."
+            onReintentar={cargarIncidentes}
+          />
         ) : (
           <iframe
             id="visor-leaflet-mapa"
@@ -406,7 +454,7 @@ export default function MapaScreen({ route, navigation }) {
         )}
 
         {/* Panel Superior: Exclusivo del Administrador */}
-        {esAdmin && coordenadaMarcada && (
+        {esAdmin && coordenadaMarcada && !errorConexion && (
           <View style={styles.floatingCoordBox}>
             <View style={styles.coordRow}>
               <MapPin size={18} color={COLORS.primary} strokeWidth={2.5} />
@@ -431,7 +479,7 @@ export default function MapaScreen({ route, navigation }) {
         )}
 
         {/* Mini Acordeón Inferior */}
-        {incidenteActivo && (
+        {incidenteActivo && !errorConexion && (
           <View style={styles.floatingAccordionContainer}>
             <TouchableOpacity
               style={styles.accordionHeader}
