@@ -55,15 +55,15 @@ export default function NetworkBanner() {
       } else if (conectado && estabaDesconectadoRef.current) {
         estabaDesconectadoRef.current = false;
         mostrarAviso("online", "Se restableció la conexión a internet.", 3);
-        commandQueueService.procesarCola();
+        commandQueueService.procesarCola().catch(() => {});
       }
     };
 
-    // 1. Escucha en Web (Eventos estándar del navegador)
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      const handleWebOffline = () => evaluarConexion(false);
-      const handleWebOnline = () => evaluarConexion(true);
+    const handleWebOffline = () => evaluarConexion(false);
+    const handleWebOnline = () => evaluarConexion(true);
 
+    // 1. Escucha en Web (Eventos estándar del navegador con referencias estables)
+    if (Platform.OS === "web" && typeof window !== "undefined") {
       window.addEventListener("offline", handleWebOffline);
       window.addEventListener("online", handleWebOnline);
 
@@ -96,8 +96,8 @@ export default function NetworkBanner() {
 
     return () => {
       if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.removeEventListener("offline", () => evaluarConexion(false));
-        window.removeEventListener("online", () => evaluarConexion(true));
+        window.removeEventListener("offline", handleWebOffline);
+        window.removeEventListener("online", handleWebOnline);
       }
       desuscribirNet();
       desuscribirQueue();

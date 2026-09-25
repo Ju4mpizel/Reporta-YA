@@ -1,6 +1,7 @@
+// src/components/HeaderInstitucional.js
 import React from "react";
-import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
-import { ShieldCheck, ArrowLeft } from "lucide-react-native";
+import { StyleSheet, Text, View, TouchableOpacity, Image } from "react-native";
+import { ArrowLeft, ShieldCheck } from "lucide-react-native";
 import { RADIUS, SPACING } from "../constants/theme";
 
 export default function HeaderInstitucional({
@@ -21,11 +22,23 @@ export default function HeaderInstitucional({
           <Text style={styles.btnBackText}>{backText}</Text>
         </TouchableOpacity>
       )}
-      <View style={styles.headerTopLine}>
-        <ShieldCheck size={13} color="#38BDF8" strokeWidth={2.4} />
-        <Text style={styles.headerSub}>{subtitulo}</Text>
+
+      <View style={styles.brandRow}>
+        <Image
+          source={require("../../assets/logo-reportaya.png")}
+          style={styles.appLogo}
+          resizeMode="contain"
+        />
+        <View style={styles.textContainer}>
+          <View style={styles.subRow}>
+            <ShieldCheck size={12} color="#38BDF8" strokeWidth={2.4} />
+            <Text style={styles.headerSub}>{subtitulo}</Text>
+          </View>
+          <Text style={styles.headerTitle} numberOfLines={2}>
+            {titulo}
+          </Text>
+        </View>
       </View>
-      <Text style={styles.headerTitle}>{titulo}</Text>
     </View>
   );
 }
@@ -34,30 +47,56 @@ const styles = StyleSheet.create({
   headerDark: {
     backgroundColor: "#0F172A",
     paddingHorizontal: SPACING.lg,
-    paddingTop: 52,
+    paddingTop: 50,
     paddingBottom: SPACING.md,
     borderBottomLeftRadius: RADIUS.lg,
     borderBottomRightRadius: RADIUS.lg,
-    elevation: 3,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 8,
   },
   btnBack: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    marginBottom: 6,
+    marginBottom: 10,
   },
-  btnBackText: { fontSize: 12, fontWeight: "700", color: "#38BDF8" },
-  headerTopLine: {
+  btnBackText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#38BDF8",
+  },
+  brandRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    marginBottom: 4,
+    gap: 12,
+  },
+  appLogo: {
+    width: 44,
+    height: 44,
+  },
+  textContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  subRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    marginBottom: 2,
   },
   headerSub: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "800",
     color: "#38BDF8",
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
-  headerTitle: { fontSize: 22, fontWeight: "900", color: "#FFFFFF" },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    lineHeight: 25,
+  },
 });

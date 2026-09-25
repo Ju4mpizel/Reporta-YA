@@ -11,8 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
-import { LogIn, FileText, Lock, ShieldCheck } from "lucide-react-native";
+import { LogIn, FileText, Lock } from "lucide-react-native";
 import { useAuth } from "../context/AuthContext";
 import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
@@ -104,20 +105,23 @@ export default function LoginScreen({ navigation }) {
             { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
           ]}
         >
+          {/* Logo Principal de la Aplicación */}
           <View style={styles.brandContainer}>
-            <View style={styles.iconCircle}>
-              <ShieldCheck size={36} color="#0284C7" strokeWidth={2.4} />
-            </View>
+            <Image
+              source={require("../../assets/logo-reportaya.png")}
+              style={styles.mainAppLogo}
+              resizeMode="contain"
+            />
             <Text style={styles.brandTitle}>Reporta YA!</Text>
             <Text style={styles.brandSubtitle}>
-              SUBALCALDÍA CALA CALA · DISTRITO 12
+              GESTIÓN CIUDADANA · DISTRITO 12
             </Text>
           </View>
 
           <View style={styles.formContainer}>
             <Text style={styles.formTitle}>Ingreso Ciudadano</Text>
             <Text style={styles.formDesc}>
-              Accede con tu Cédula de Identidad para gestionar o apoyar
+              Accede con tu Cédula de Identidad para gestionar o reportar
               incidentes
             </Text>
 
@@ -193,11 +197,27 @@ export default function LoginScreen({ navigation }) {
                 <Text style={styles.linkBold}>Regístrate aquí</Text>
               </Text>
             </TouchableOpacity>
+
+            {/* Sello de Alianza con la Alcaldía */}
+            <View style={styles.cochaFooter}>
+              <Image
+                source={require("../../assets/logo-alcaldia.png")}
+                style={styles.footerAlcaldiaImg}
+                resizeMode="contain"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.footerAlcaldiaTitle}>
+                  GOBIERNO AUTÓNOMO MUNICIPAL DE COCHABAMBA
+                </Text>
+                <Text style={styles.footerAlcaldiaSub}>
+                  En coordinación con la Subalcaldía Cala Cala
+                </Text>
+              </View>
+            </View>
           </View>
         </Animated.View>
       </ScrollView>
 
-      {/* Alerta Institucional */}
       <CustomModalAlert
         visible={alerta.visible}
         tipo={alerta.tipo}
@@ -215,7 +235,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: SPACING.lg,
-    paddingVertical: 40,
+    paddingVertical: 30,
   },
   cardWrapper: {
     backgroundColor: COLORS.surface,
@@ -229,21 +249,15 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
-  brandContainer: { alignItems: "center", marginBottom: SPACING.lg },
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#F0F9FF",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: SPACING.xs,
+  brandContainer: { alignItems: "center", marginBottom: SPACING.md },
+  mainAppLogo: {
+    width: 72,
+    height: 72,
+    marginBottom: 8,
   },
   brandTitle: { fontSize: 24, fontWeight: "900", color: COLORS.textDark },
   brandSubtitle: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: "800",
     color: COLORS.primary,
     letterSpacing: 1,
@@ -292,11 +306,35 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     letterSpacing: 0.5,
   },
-  linkWrapper: { marginTop: SPACING.lg, alignItems: "center" },
+  linkWrapper: { marginTop: SPACING.md, alignItems: "center" },
   linkText: { fontSize: 12, color: COLORS.textMuted },
   linkBold: {
     fontWeight: "800",
     color: COLORS.primary,
     textDecorationLine: "underline",
+  },
+  cochaFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  footerAlcaldiaImg: {
+    width: 60,
+    height: 26,
+  },
+  footerAlcaldiaTitle: {
+    fontSize: 8.5,
+    fontWeight: "900",
+    color: COLORS.textDark,
+    letterSpacing: 0.3,
+  },
+  footerAlcaldiaSub: {
+    fontSize: 8,
+    color: COLORS.textMuted,
+    fontWeight: "600",
   },
 });

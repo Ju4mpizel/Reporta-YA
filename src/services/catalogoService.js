@@ -7,6 +7,17 @@ const STORAGE_CALLES = "@reporta_ya:cache_calles";
 const STORAGE_CATEGORIAS = "@reporta_ya:cache_categorias";
 const STORAGE_DEPARTAMENTOS = "@reporta_ya:cache_departamentos";
 
+const leerCacheSegura = async (key) => {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 export const catalogoService = {
   async obtenerZonas() {
     try {
@@ -14,16 +25,19 @@ export const catalogoService = {
         .from("zonas")
         .select("id, nombre, distrito")
         .order("nombre");
+
       if (error) throw error;
-      if (data && data.length > 0) {
+      if (Array.isArray(data) && data.length > 0) {
         await AsyncStorage.setItem(STORAGE_ZONAS, JSON.stringify(data));
         return data;
       }
     } catch (err) {
-      console.warn("Sin red para zonas, usando caché local:", err.message);
+      console.warn(
+        "[catalogoService] Usando caché local de zonas:",
+        err.message,
+      );
     }
-    const local = await AsyncStorage.getItem(STORAGE_ZONAS);
-    return local ? JSON.parse(local) : [];
+    return await leerCacheSegura(STORAGE_ZONAS);
   },
 
   async obtenerCallesPorZona(zonaId) {
@@ -34,10 +48,10 @@ export const catalogoService = {
         .select("id, nombre, tipo, google_maps_url, zona_id")
         .eq("zona_id", zonaId)
         .order("nombre");
+
       if (error) throw error;
-      if (data) {
-        const local = await AsyncStorage.getItem(STORAGE_CALLES);
-        const todas = local ? JSON.parse(local) : [];
+      if (Array.isArray(data) && data.length > 0) {
+        const todas = await leerCacheSegura(STORAGE_CALLES);
         const filtradas = todas.filter((c) => c.zona_id !== zonaId);
         await AsyncStorage.setItem(
           STORAGE_CALLES,
@@ -46,11 +60,14 @@ export const catalogoService = {
         return data;
       }
     } catch (err) {
-      console.warn("Sin red para calles, usando caché local:", err.message);
+      console.warn(
+        "[catalogoService] Usando caché local de calles:",
+        err.message,
+      );
     }
-    const local = await AsyncStorage.getItem(STORAGE_CALLES);
-    if (!local) return [];
-    return JSON.parse(local).filter((c) => c.zona_id === zonaId);
+
+    const todas = await leerCacheSegura(STORAGE_CALLES);
+    return todas.filter((c) => c.zona_id === zonaId);
   },
 
   async obtenerCategorias() {
@@ -59,16 +76,19 @@ export const catalogoService = {
         .from("categorias_incidente")
         .select("id, nombre")
         .order("nombre");
+
       if (error) throw error;
-      if (data && data.length > 0) {
+      if (Array.isArray(data) && data.length > 0) {
         await AsyncStorage.setItem(STORAGE_CATEGORIAS, JSON.stringify(data));
         return data;
       }
     } catch (err) {
-      console.warn("Sin red para categorías, usando caché local:", err.message);
+      console.warn(
+        "[catalogoService] Usando caché local de categorías:",
+        err.message,
+      );
     }
-    const local = await AsyncStorage.getItem(STORAGE_CATEGORIAS);
-    return local ? JSON.parse(local) : [];
+    return await leerCacheSegura(STORAGE_CATEGORIAS);
   },
 
   async obtenerDepartamentos() {
@@ -78,19 +98,19 @@ export const catalogoService = {
         .select("id, nombre")
         .eq("activo", true)
         .order("id", { ascending: true });
+
       if (error) throw error;
-      if (data && data.length > 0) {
+      if (Array.isArray(data) && data.length > 0) {
         await AsyncStorage.setItem(STORAGE_DEPARTAMENTOS, JSON.stringify(data));
         return data;
       }
     } catch (err) {
       console.warn(
-        "Sin red para departamentos, usando caché local:",
+        "[catalogoService] Usando caché local de departamentos:",
         err.message,
       );
     }
-    const local = await AsyncStorage.getItem(STORAGE_DEPARTAMENTOS);
-    return local ? JSON.parse(local) : [];
+    return await leerCacheSegura(STORAGE_DEPARTAMENTOS);
   },
 
   async precargarCatalogoCompleto() {
@@ -112,26 +132,49 @@ export const catalogoService = {
           .order("id", { ascending: true }),
       ]);
 
-      if (resZonas.data)
+      // Solo sobreescribir si la petición no trajo error y tiene datos válidos
+      if (
+        !resZonas.error &&
+        Array.isArray(resZonas.data) &&
+        resZonas.data.length > 0
+      ) {
         await AsyncStorage.setItem(
           STORAGE_ZONAS,
           JSON.stringify(resZonas.data),
         );
-      if (resCalles.data)
+      }
+      if (
+        !resCalles.error &&
+        Array.isArray(resCalles.data) &&
+        resCalles.data.length > 0
+      ) {
         await AsyncStorage.setItem(
           STORAGE_CALLES,
           JSON.stringify(resCalles.data),
         );
-      if (resCats.data)
+      }
+      if (
+        !resCats.error &&
+        Array.isArray(resCats.data) &&
+        resCats.data.length > 0
+      ) {
         await AsyncStorage.setItem(
           STORAGE_CATEGORIAS,
           JSON.stringify(resCats.data),
         );
-      if (resDeptos.data)
+      }
+      if (
+        !resDeptos.error &&
+        Array.isArray(resDeptos.data) &&
+        resDeptos.data.length > 0
+      ) {
         await AsyncStorage.setItem(
           STORAGE_DEPARTAMENTOS,
           JSON.stringify(resDeptos.data),
         );
-    } catch (e) {}
+      }
+    } catch (e) {
+      // Si está offline o falla la red, las cachés existentes quedan intactas
+    }
   },
 };

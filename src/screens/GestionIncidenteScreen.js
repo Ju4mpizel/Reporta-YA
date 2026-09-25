@@ -41,17 +41,17 @@ const ESTADOS_DISPONIBLES = [
 ];
 
 export default function GestionIncidenteScreen({ route, navigation }) {
-  const { incidente } = route.params;
+  const incidente = route?.params?.incidente;
 
   const [departamentos, setDepartamentos] = useState([]);
   const [deptoSeleccionado, setDeptoSeleccionado] = useState(
-    incidente.departamento_id || null,
+    incidente?.departamento_id || null,
   );
   const [estadoSeleccionado, setEstadoSeleccionado] = useState(
-    incidente.estado || "en_revision",
+    incidente?.estado || "en_revision",
   );
   const [notaMunicipal, setNotaMunicipal] = useState(
-    incidente.nota_alcaldia || "",
+    incidente?.nota_alcaldia || "",
   );
 
   const [acordeonAbierto, setAcordeonAbierto] = useState(null);
@@ -77,8 +77,10 @@ export default function GestionIncidenteScreen({ route, navigation }) {
   }, []);
 
   useEffect(() => {
-    cargarDepartamentos();
-  }, []);
+    if (incidente) {
+      cargarDepartamentos();
+    }
+  }, [incidente]);
 
   async function cargarDepartamentos() {
     try {
@@ -97,6 +99,8 @@ export default function GestionIncidenteScreen({ route, navigation }) {
   };
 
   async function handleGuardar() {
+    if (!incidente) return;
+
     const comando = new DictaminarIncidenteCommand({
       incidenteId: incidente.id,
       departamentoId: deptoSeleccionado,
@@ -109,14 +113,18 @@ export default function GestionIncidenteScreen({ route, navigation }) {
       setGuardando(true);
 
       let tieneInternet = true;
-      if (Platform.OS === "web" && typeof navigator !== "undefined") {
-        tieneInternet = navigator.onLine === true;
-      }
-      if (tieneInternet) {
-        const netState = await NetInfo.fetch();
-        tieneInternet = Boolean(
-          netState.isConnected && netState.isInternetReachable !== false,
-        );
+      try {
+        if (Platform.OS === "web" && typeof navigator !== "undefined") {
+          tieneInternet = navigator.onLine === true;
+        }
+        if (tieneInternet) {
+          const netState = await NetInfo.fetch();
+          tieneInternet = Boolean(
+            netState.isConnected && netState.isInternetReachable !== false,
+          );
+        }
+      } catch {
+        tieneInternet = false;
       }
 
       if (tieneInternet) {
@@ -170,6 +178,24 @@ export default function GestionIncidenteScreen({ route, navigation }) {
     } finally {
       setGuardando(false);
     }
+  }
+
+  // Salvaguarda visual si la pantalla se abrió sin parámetros válidos
+  if (!incidente) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorParamText}>
+          No se proporcionó información de un expediente válido.
+        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.btnVolverFallback}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.btnVolverFallbackText}>Volver a la Bandeja</Text>
+        </TouchableOpacity>
+      </View>
+    );
   }
 
   const nombreDeptoActual = deptoSeleccionado
@@ -470,6 +496,31 @@ export default function GestionIncidenteScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   screenWrapper: { flex: 1, backgroundColor: COLORS.background },
   container: { flex: 1 },
+  centerContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.background,
+    padding: SPACING.lg,
+  },
+  errorParamText: {
+    color: COLORS.textDark,
+    fontWeight: "700",
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  btnVolverFallback: {
+    backgroundColor: COLORS.primaryDark,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: RADIUS.sm,
+  },
+  btnVolverFallbackText: {
+    color: "#FFFFFF",
+    fontWeight: "800",
+    fontSize: 12,
+  },
   content: { padding: SPACING.lg, paddingBottom: SPACING.bottomInset || 20 },
   summaryCard: {
     backgroundColor: COLORS.surface,
