@@ -26,6 +26,7 @@ import {
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import NetInfo from "@react-native-community/netinfo";
+import { WebView } from "react-native-webview";
 import { useAuth } from "../context/AuthContext";
 import { incidentesService } from "../services/incidentesService";
 import { callesService } from "../services/callesService";
@@ -106,7 +107,7 @@ export default function MapaScreen({ route, navigation }) {
     }
   }
 
-  // Listener seguro: Se ejecuta ÚNICAMENTE si estamos en navegador web
+  // Listener exclusivo para entorno Web
   useEffect(() => {
     if (
       Platform.OS !== "web" ||
@@ -323,9 +324,9 @@ export default function MapaScreen({ route, navigation }) {
           <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
           <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
           <style>
-            html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f1f5f9; }
-            .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; }
-            .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; }
+            html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; }
+            .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; font-family: system-ui, sans-serif; }
+            .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; font-family: system-ui, sans-serif; }
           </style>
         </head>
         <body>
@@ -339,7 +340,7 @@ export default function MapaScreen({ route, navigation }) {
 
             incidentes.forEach(function(inc) {
               var m = L.marker([inc.lat, inc.lng]).addTo(map);
-              m.bindPopup('<b>' + (inc.calle || '') + '</b><br>' + (inc.titulo || ''));
+              m.bindPopup('<div class="pop-calle">🔴 ' + (inc.calle || '') + '</div><div class="pop-tit">' + (inc.titulo || '') + '</div>');
             });
           </script>
         </body>
@@ -376,25 +377,19 @@ export default function MapaScreen({ route, navigation }) {
             title="Mapa Territorial Cochabamba D12"
           />
         ) : (
-          <View style={styles.mobileMapFallback}>
-            <MapPin size={46} color={COLORS.primary} />
-            <Text style={styles.mobileMapTitle}>Visor Territorial Móvil</Text>
-            <Text style={styles.mobileMapSubtitle}>
-              {incidentes.length} incidentes geolocalizados en el Distrito 12.
-            </Text>
-            {incidenteActivo && (
-              <TouchableOpacity
-                style={styles.btnAppMapsMobile}
-                activeOpacity={0.8}
-                onPress={() => abrirEnGoogleMaps(incidenteActivo)}
-              >
-                <Navigation size={15} color="#FFFFFF" strokeWidth={2.4} />
-                <Text style={styles.btnAppMapsText}>
-                  Abrir reporte activo en Google Maps
-                </Text>
-              </TouchableOpacity>
+          <WebView
+            originWhitelist={["*"]}
+            source={{ html: generarHtmlLeaflet() }}
+            style={styles.iframe}
+            javaScriptEnabled={true}
+            domStorageEnabled={true}
+            startInLoadingState={true}
+            renderLoading={() => (
+              <View style={styles.centerBox}>
+                <ActivityIndicator size="large" color={COLORS.primary} />
+              </View>
             )}
-          </View>
+          />
         )}
 
         {esAdmin && coordenadaMarcada && !errorConexion && (
@@ -627,48 +622,34 @@ export default function MapaScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  mapContainer: { flex: 1, position: "relative" },
-  iframe: { width: "100%", height: "100%", border: "none" },
-  centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
-
-  mobileMapFallback: {
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background || "#F8FAFC",
+  },
+  mapContainer: {
+    flex: 1,
+    position: "relative",
+    backgroundColor: "#F8FAFC",
+  },
+  iframe: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#F8FAFC",
+  },
+  centerBox: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: 24,
     backgroundColor: "#F8FAFC",
   },
-  mobileMapTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    marginTop: 12,
-  },
-  mobileMapSubtitle: {
-    fontSize: 13,
-    color: COLORS.textMuted,
-    textAlign: "center",
-    marginTop: 4,
-    marginBottom: 20,
-  },
-  btnAppMapsMobile: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: COLORS.primaryDark,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: RADIUS.md,
-  },
+  loadingText: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
 
   floatingCoordBox: {
     position: "absolute",
     top: 12,
     left: 12,
     right: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    backgroundColor: "#FFFFFF",
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.primaryLight,
@@ -700,7 +681,7 @@ const styles = StyleSheet.create({
     bottom: 12,
     left: 12,
     right: 12,
-    backgroundColor: "rgba(255, 255, 255, 0.98)",
+    backgroundColor: "#FFFFFF",
     borderRadius: RADIUS.md,
     borderWidth: 1,
     borderColor: COLORS.border,
@@ -862,6 +843,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 13,
     color: COLORS.textDark,
+    backgroundColor: "#FFFFFF",
   },
   tipoRow: { flexDirection: "row", gap: 6, marginVertical: 6 },
   tipoBtn: {
@@ -871,6 +853,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: RADIUS.sm,
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
   tipoBtnActive: {
     backgroundColor: COLORS.primary,
