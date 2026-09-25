@@ -46,12 +46,14 @@ export default function MapaScreen({ route, navigation }) {
     }
   }, []);
 
-  const rolUser = (
-    perfil?.rol_id ||
-    perfil?.roles?.id ||
+  // Envoltura defensiva con String(...) para evitar TypeError si rol_id es un valor numérico
+  const rolUser = String(
     perfil?.roles?.nombre ||
-    perfil?.rol ||
-    ""
+      perfil?.rol_nombre ||
+      perfil?.rol ||
+      perfil?.rol_id ||
+      perfil?.roles?.id ||
+      "",
   )
     .toLowerCase()
     .trim();
@@ -212,7 +214,6 @@ export default function MapaScreen({ route, navigation }) {
   };
 
   const handleGuardarCalle = async () => {
-    // 1. Verificación previa de conexión a internet
     let conexionActiva = true;
     if (Platform.OS === "web" && typeof navigator !== "undefined") {
       conexionActiva = navigator.onLine === true;

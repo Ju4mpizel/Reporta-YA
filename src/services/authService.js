@@ -53,12 +53,17 @@ export const authService = {
       throw new Error("CI_NO_ENCONTRADO");
     }
 
+    // Preservar rol_nombre devuelto por la BD
+    const nombreRol =
+      perfil.rol_nombre ||
+      (typeof perfil.rol_id === "string" ? perfil.rol_id : "ciudadano");
+
     const perfilFormateado = {
       ...perfil,
-      rol_nombre: perfil.rol_id,
+      rol_nombre: nombreRol,
       roles: {
         id: perfil.rol_id,
-        nombre: perfil.rol_id,
+        nombre: nombreRol,
       },
     };
 
@@ -85,12 +90,16 @@ export const authService = {
     }
 
     const perfil = Array.isArray(data) ? data[0] : data;
+    const nombreRol =
+      perfil.rol_nombre ||
+      (typeof perfil.rol_id === "string" ? perfil.rol_id : "ciudadano");
+
     const perfilFormateado = {
       ...perfil,
-      rol_nombre: perfil.rol_id,
+      rol_nombre: nombreRol,
       roles: {
         id: perfil.rol_id,
-        nombre: perfil.rol_id,
+        nombre: nombreRol,
       },
     };
 
