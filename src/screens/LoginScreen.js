@@ -116,6 +116,8 @@ export default function LoginScreen({ navigation }) {
 
     try {
       await login(ciCompleto, password);
+      // Al completarse el login, estaAutenticado pasa a TRUE
+      // y AppNavigator cambia de vista al instante de forma reactiva.
     } catch (err) {
       const msg = err.message || "";
 
