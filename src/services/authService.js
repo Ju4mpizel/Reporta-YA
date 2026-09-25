@@ -9,8 +9,7 @@ export const authService = {
     try {
       const json = await AsyncStorage.getItem(AUTH_STORAGE_KEY);
       return json ? JSON.parse(json) : null;
-    } catch (err) {
-      console.error("[authService] Error al leer sesión local:", err.message);
+    } catch {
       return null;
     }
   },
@@ -38,140 +37,60 @@ export const authService = {
   },
 
   async login(ci, password) {
-    const ciBuscado = ci.trim();
-    console.log("[authService] Iniciando login para CI:", ciBuscado);
+    const { data, error } = await supabase.rpc("login_usuario", {
+      p_ci: String(ci || "").trim(),
+      p_password: String(password || "").trim(),
+    });
 
-    let { data: usuario, error: errConsulta } = await supabase
-      .from("perfiles")
-      .select("*")
-      .eq("ci", ciBuscado)
-      .maybeSingle();
-
-    if (!usuario && ciBuscado.includes(" ")) {
-      const soloNumero = ciBuscado.split(" ")[0].trim();
-      console.log(
-        "[authService] Coincidencia exacta no hallada. Probando número base:",
-        soloNumero,
-      );
-      const res = await supabase
-        .from("perfiles")
-        .select("*")
-        .eq("ci", soloNumero)
-        .maybeSingle();
-
-      usuario = res.data;
-      errConsulta = res.error;
-    }
-
-    if (errConsulta) {
-      console.error(
-        "[authService] Error de consulta en BD:",
-        errConsulta.message,
-      );
+    if (error) {
       throw new Error(
-        errConsulta.message || "Error al conectar con el servidor.",
+        error.message || "Credenciales incorrectas o cuenta inhabilitada.",
       );
     }
 
-    if (!usuario) {
-      console.warn("[authService] CI no registrado en la base de datos.");
+    const perfil = Array.isArray(data) ? data[0] : data;
+    if (!perfil) {
       throw new Error("CI_NO_ENCONTRADO");
     }
 
-    if (String(usuario.password).trim() !== String(password).trim()) {
-      console.warn(
-        "[authService] Contraseña incorrecta para el usuario:",
-        usuario.ci,
-      );
-      throw new Error("PASSWORD_INCORRECTO");
-    }
-
-    if (!usuario.activo) {
-      console.warn("[authService] Cuenta inhabilitada:", usuario.ci);
-      throw new Error("CUENTA_INHABILITADA");
-    }
-
     const perfilFormateado = {
-      ...usuario,
-      rol_nombre: usuario.rol_id,
+      ...perfil,
+      rol_nombre: perfil.rol_id,
       roles: {
-        id: usuario.rol_id,
-        nombre: usuario.rol_id,
+        id: perfil.rol_id,
+        nombre: perfil.rol_id,
       },
     };
 
     await this.guardarSesionLocal(perfilFormateado);
-    console.log(
-      "[authService] Sesión guardada con éxito para:",
-      perfilFormateado.nombre_completo,
-    );
     return perfilFormateado;
   },
 
   async registrar({ ci, nombreCompleto, telefono, password }) {
-    const ciLimpio = ci.trim();
-
-    const { data: existente } = await supabase
-      .from("perfiles")
-      .select("id")
-      .eq("ci", ciLimpio)
-      .maybeSingle();
-
-    if (existente) {
-      throw new Error("CARNET_DUPLICADO");
-    }
-
-    const { data, error } = await supabase
-      .from("perfiles")
-      .insert([
-        {
-          ci: ciLimpio,
-          nombre_completo: nombreCompleto.trim(),
-          telefono: telefono ? telefono.trim() : null,
-          password: String(password).trim(),
-          rol_id: "ciudadano",
-          activo: true,
-        },
-      ])
-      .select("*")
-      .single();
+    const { data, error } = await supabase.rpc("registrar_usuario", {
+      p_ci: String(ci || "").trim(),
+      p_nombre_completo: String(nombreCompleto || "").trim(),
+      p_telefono: telefono ? String(telefono).trim() : null,
+      p_password: String(password || "").trim(),
+    });
 
     if (error) {
-      if (error.code === "23505") {
+      if (
+        error.code === "23505" ||
+        /CARNET_DUPLICADO|ya existe/i.test(error.message)
+      ) {
         throw new Error("CARNET_DUPLICADO");
       }
-      throw error;
+      throw new Error(error.message || "Error al procesar el empadronamiento.");
     }
 
+    const perfil = Array.isArray(data) ? data[0] : data;
     const perfilFormateado = {
-      ...data,
-      rol_nombre: data.rol_id,
+      ...perfil,
+      rol_nombre: perfil.rol_id,
       roles: {
-        id: data.rol_id,
-        nombre: data.rol_id,
-      },
-    };
-
-    await this.guardarSesionLocal(perfilFormateado);
-    return perfilFormateado;
-  },
-
-  async recargarPerfil(usuarioId) {
-    const { data, error } = await supabase
-      .from("perfiles")
-      .select("*")
-      .eq("id", usuarioId)
-      .single();
-
-    if (error) throw error;
-    if (!data) return null;
-
-    const perfilFormateado = {
-      ...data,
-      rol_nombre: data.rol_id,
-      roles: {
-        id: data.rol_id,
-        nombre: data.rol_id,
+        id: perfil.rol_id,
+        nombre: perfil.rol_id,
       },
     };
 

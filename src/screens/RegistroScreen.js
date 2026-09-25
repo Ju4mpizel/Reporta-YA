@@ -142,19 +142,17 @@ export default function RegistroScreen({ navigation }) {
     return Object.keys(nuevosErrores).length === 0;
   };
 
+  // Comprobación segura mediante la RPC verificar_ci_existe
   const verificarCiExistente = async (ciCompleto) => {
     try {
       setVerificandoCI(true);
-      const { data, error } = await supabase
-        .from("perfiles")
-        .select("id")
-        .eq("ci", ciCompleto.trim())
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("verificar_ci_existe", {
+        p_ci: ciCompleto.trim(),
+      });
 
       if (error) throw error;
       return Boolean(data);
-    } catch (err) {
-      console.warn("Fallo comprobación de CI:", err.message);
+    } catch {
       return false;
     } finally {
       setVerificandoCI(false);
