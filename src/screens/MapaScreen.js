@@ -46,7 +46,6 @@ export default function MapaScreen({ route, navigation }) {
     }
   }, []);
 
-  // Envoltura defensiva con String(...) para evitar TypeError si rol_id es un valor numérico
   const rolUser = String(
     perfil?.roles?.nombre ||
       perfil?.rol_nombre ||
@@ -70,20 +69,15 @@ export default function MapaScreen({ route, navigation }) {
   const [menuAbierto, setMenuAbierto] = useState(false);
   const [errorConexion, setErrorConexion] = useState(false);
 
-  // Zonas de catastro
   const [zonas, setZonas] = useState([]);
   const [zonaSeleccionada, setZonaSeleccionada] = useState(null);
-
-  // Coordenada capturada por el admin
   const [coordenadaMarcada, setCoordenadaMarcada] = useState(null);
 
-  // Modal para agregar nueva calle
   const [modalVisible, setModalVisible] = useState(false);
   const [nombreNuevaCalle, setNombreNuevaCalle] = useState("");
   const [tipoNuevaCalle, setTipoNuevaCalle] = useState("avenida");
   const [guardandoCalle, setGuardandoCalle] = useState(false);
 
-  // Estado para la alerta personalizada unificada
   const [alerta, setAlerta] = useState({
     visible: false,
     tipo: "exito",
@@ -112,7 +106,16 @@ export default function MapaScreen({ route, navigation }) {
     }
   }
 
+  // Listener seguro: Se ejecuta ÚNICAMENTE si estamos en navegador web
   useEffect(() => {
+    if (
+      Platform.OS !== "web" ||
+      typeof window === "undefined" ||
+      !window.addEventListener
+    ) {
+      return;
+    }
+
     const handleMensajeIframe = (event) => {
       try {
         const datos =
@@ -131,13 +134,9 @@ export default function MapaScreen({ route, navigation }) {
       } catch (e) {}
     };
 
-    if (typeof window !== "undefined") {
-      window.addEventListener("message", handleMensajeIframe);
-    }
+    window.addEventListener("message", handleMensajeIframe);
     return () => {
-      if (typeof window !== "undefined") {
-        window.removeEventListener("message", handleMensajeIframe);
-      }
+      window.removeEventListener("message", handleMensajeIframe);
     };
   }, [esAdmin, incidentes]);
 
@@ -177,13 +176,10 @@ export default function MapaScreen({ route, navigation }) {
         setIncidenteActivo(null);
       }
     } catch (err) {
-      console.error("Error al cargar incidentes para Leaflet:", err.message);
+      console.error("Error al cargar incidentes:", err.message);
       const esErrorDeRed =
         err.message?.toLowerCase().includes("failed to fetch") ||
-        err.message?.toLowerCase().includes("network") ||
-        (Platform.OS === "web" &&
-          typeof navigator !== "undefined" &&
-          !navigator.onLine);
+        err.message?.toLowerCase().includes("network");
 
       if (esErrorDeRed) {
         setErrorConexion(true);
@@ -197,7 +193,7 @@ export default function MapaScreen({ route, navigation }) {
     setIncidenteActivo(inc);
     setMenuAbierto(false);
 
-    if (typeof window !== "undefined") {
+    if (Platform.OS === "web" && typeof document !== "undefined") {
       const iframe = document.getElementById("visor-leaflet-mapa");
       if (iframe && iframe.contentWindow) {
         iframe.contentWindow.postMessage(
@@ -213,18 +209,23 @@ export default function MapaScreen({ route, navigation }) {
     }
   };
 
-  const handleGuardarCalle = async () => {
-    let conexionActiva = true;
-    if (Platform.OS === "web" && typeof navigator !== "undefined") {
-      conexionActiva = navigator.onLine === true;
+  const abrirEnGoogleMaps = (inc) => {
+    if (inc?.maps_url) {
+      Linking.openURL(inc.maps_url);
+      return;
     }
+    const lat = inc?.lat || LAT_DEFAULT;
+    const lng = inc?.lng || LNG_DEFAULT;
+    Linking.openURL(
+      `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
+    );
+  };
 
-    if (conexionActiva) {
-      const netState = await NetInfo.fetch();
-      conexionActiva = Boolean(
-        netState.isConnected && netState.isInternetReachable !== false,
-      );
-    }
+  const handleGuardarCalle = async () => {
+    const netState = await NetInfo.fetch();
+    const conexionActiva = Boolean(
+      netState.isConnected && netState.isInternetReachable !== false,
+    );
 
     if (!conexionActiva) {
       setAlerta({
@@ -251,7 +252,7 @@ export default function MapaScreen({ route, navigation }) {
         visible: true,
         tipo: "error",
         titulo: "Punto no marcado",
-        mensaje: "Toca primero en el mapa para ubicar la vía exactamente.",
+        mensaje: "Ubica la vía antes de guardar.",
       });
       return;
     }
@@ -277,17 +278,12 @@ export default function MapaScreen({ route, navigation }) {
         mensaje: `La vía "${nombreNuevaCalle}" se guardó correctamente en el catastro municipal.`,
       });
     } catch (err) {
-      const esErrorDeRed =
-        err.message?.toLowerCase().includes("failed to fetch") ||
-        err.message?.toLowerCase().includes("network");
-
       setAlerta({
         visible: true,
         tipo: "error",
-        titulo: esErrorDeRed ? "Sin Conexión" : "Error al guardar",
-        mensaje: esErrorDeRed
-          ? "Se perdió la conexión a internet. No se pudo registrar la vía."
-          : err.message || "No se pudo registrar la calle en la base de datos.",
+        titulo: "Error al guardar",
+        mensaje:
+          err.message || "No se pudo registrar la calle en la base de datos.",
       });
     } finally {
       setGuardandoCalle(false);
@@ -328,27 +324,6 @@ export default function MapaScreen({ route, navigation }) {
           <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
           <style>
             html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f1f5f9; }
-            .leaflet-popup-content-wrapper { border-radius: 8px; font-family: system-ui, sans-serif; }
-            
-            .pin-alfiler-wrapper { position: relative; width: 24px; height: 36px; }
-            .pin-bolita-roja {
-              width: 16px; height: 16px;
-              background: radial-gradient(circle at 35% 35%, #EF4444, #991B1B);
-              border: 1.5px solid #FFFFFF;
-              border-radius: 50%;
-              box-shadow: 0 3px 6px rgba(0,0,0,0.35);
-              position: absolute; top: 0; left: 4px; z-index: 2;
-            }
-            .pin-aguja-metalica {
-              width: 2.5px; height: 20px;
-              background: linear-gradient(to right, #94A3B8, #475569);
-              position: absolute; top: 15px; left: 11px; border-radius: 1px; z-index: 1;
-            }
-            .pin-sombra-base {
-              width: 8px; height: 4px;
-              background: rgba(0,0,0,0.3);
-              border-radius: 50%; position: absolute; bottom: 0; left: 8px;
-            }
             .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; }
             .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; }
           </style>
@@ -361,62 +336,10 @@ export default function MapaScreen({ route, navigation }) {
 
             var map = L.map('map', { zoomControl: false }).setView([${latInicial}, ${lngInicial}], 16);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            L.control.zoom({ position: 'topright' }).addTo(map);
-
-            var iconoAlfilerRojo = L.divIcon({
-              className: 'alfiler-custom',
-              html: '<div class="pin-alfiler-wrapper"><div class="pin-bolita-roja"></div><div class="pin-aguja-metalica"></div><div class="pin-sombra-base"></div></div>',
-              iconSize: [24, 36],
-              iconAnchor: [12, 35],
-              popupAnchor: [0, -32]
-            });
-
-            var marcadoresIncidentes = {};
 
             incidentes.forEach(function(inc) {
-              var m = L.marker([inc.lat, inc.lng], { icon: iconoAlfilerRojo }).addTo(map);
-              var popHtml = '<div class="pop-calle">🔴 ' + (inc.calle || '') + '</div><div class="pop-tit">' + (inc.titulo || '') + '</div>';
-              m.bindPopup(popHtml);
-
-              m.on('click', function() {
-                window.parent.postMessage(JSON.stringify({ tipo: 'INCIDENTE_CLICKEADO', id: inc.id }), '*');
-              });
-
-              marcadoresIncidentes[inc.id] = m;
-            });
-
-            var markerAdmin = null;
-
-            if (esAdmin) {
-              markerAdmin = L.marker([${latInicial}, ${lngInicial}], { draggable: true }).addTo(map);
-
-              function notificar(lat, lng) {
-                window.parent.postMessage(JSON.stringify({ tipo: 'PUNTO_SELECCIONADO', lat: lat, lng: lng }), '*');
-              }
-
-              map.on('click', function(e) {
-                markerAdmin.setLatLng(e.latlng);
-                notificar(e.latlng.lat, e.latlng.lng);
-              });
-
-              markerAdmin.on('dragend', function(e) {
-                var pos = markerAdmin.getLatLng();
-                notificar(pos.lat, pos.lng);
-              });
-            }
-
-            window.addEventListener('message', function(event) {
-              try {
-                var d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                if (d.tipo === 'VOLAR_A_INCIDENTE') {
-                  map.flyTo([d.lat, d.lng], 17, { duration: 1.2 });
-                  if (marcadoresIncidentes[d.id]) {
-                    setTimeout(function() {
-                      marcadoresIncidentes[d.id].openPopup();
-                    }, 1200);
-                  }
-                }
-              } catch(e) {}
+              var m = L.marker([inc.lat, inc.lng]).addTo(map);
+              m.bindPopup('<b>' + (inc.calle || '') + '</b><br>' + (inc.titulo || ''));
             });
           </script>
         </body>
@@ -441,10 +364,10 @@ export default function MapaScreen({ route, navigation }) {
         ) : errorConexion ? (
           <OfflineEmptyState
             titulo="Mapa no disponible sin conexión"
-            mensaje="El visor territorial y los mapas de OpenStreetMap requieren conexión a internet para descargar la cartografía."
+            mensaje="El visor territorial requiere conexión a internet para descargar la cartografía."
             onReintentar={cargarIncidentes}
           />
-        ) : (
+        ) : Platform.OS === "web" ? (
           <iframe
             id="visor-leaflet-mapa"
             key={`mapa-${esAdmin ? "admin" : "ciudadano"}`}
@@ -452,17 +375,34 @@ export default function MapaScreen({ route, navigation }) {
             style={styles.iframe}
             title="Mapa Territorial Cochabamba D12"
           />
+        ) : (
+          <View style={styles.mobileMapFallback}>
+            <MapPin size={46} color={COLORS.primary} />
+            <Text style={styles.mobileMapTitle}>Visor Territorial Móvil</Text>
+            <Text style={styles.mobileMapSubtitle}>
+              {incidentes.length} incidentes geolocalizados en el Distrito 12.
+            </Text>
+            {incidenteActivo && (
+              <TouchableOpacity
+                style={styles.btnAppMapsMobile}
+                activeOpacity={0.8}
+                onPress={() => abrirEnGoogleMaps(incidenteActivo)}
+              >
+                <Navigation size={15} color="#FFFFFF" strokeWidth={2.4} />
+                <Text style={styles.btnAppMapsText}>
+                  Abrir reporte activo en Google Maps
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
 
-        {/* Panel Superior: Exclusivo del Administrador */}
         {esAdmin && coordenadaMarcada && !errorConexion && (
           <View style={styles.floatingCoordBox}>
             <View style={styles.coordRow}>
               <MapPin size={18} color={COLORS.primary} strokeWidth={2.5} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.coordLabel}>
-                  Punto Seleccionado (Toca el mapa para moverlo):
-                </Text>
+                <Text style={styles.coordLabel}>Punto Seleccionado:</Text>
                 <Text style={styles.coordValue}>
                   {coordenadaMarcada.lat}, {coordenadaMarcada.lng}
                 </Text>
@@ -479,7 +419,6 @@ export default function MapaScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* Mini Acordeón Inferior */}
         {incidenteActivo && !errorConexion && (
           <View style={styles.floatingAccordionContainer}>
             <TouchableOpacity
@@ -541,22 +480,11 @@ export default function MapaScreen({ route, navigation }) {
               </View>
             )}
 
-            {/* Barra de Acciones */}
             <View style={styles.cardActionsRow}>
               <TouchableOpacity
                 style={styles.btnAppMaps}
                 activeOpacity={0.8}
-                onPress={() => {
-                  if (incidenteActivo?.maps_url) {
-                    Linking.openURL(incidenteActivo.maps_url);
-                    return;
-                  }
-                  const lat = incidenteActivo?.lat || LAT_DEFAULT;
-                  const lng = incidenteActivo?.lng || LNG_DEFAULT;
-                  Linking.openURL(
-                    `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`,
-                  );
-                }}
+                onPress={() => abrirEnGoogleMaps(incidenteActivo)}
               >
                 <Navigation size={12} color="#FFFFFF" strokeWidth={2.4} />
                 <Text style={styles.btnAppMapsText}>Abrir en Google Maps</Text>
@@ -588,15 +516,12 @@ export default function MapaScreen({ route, navigation }) {
         )}
       </View>
 
-      {/* Modal para Guardar Calle con Selector de Zona */}
       {esAdmin && (
         <Modal visible={modalVisible} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  Registrar Nueva Calle / Avenida
-                </Text>
+                <Text style={styles.modalTitle}>Registrar Nueva Calle</Text>
                 <TouchableOpacity onPress={() => setModalVisible(false)}>
                   <X size={20} color={COLORS.textMuted} />
                 </TouchableOpacity>
@@ -690,7 +615,6 @@ export default function MapaScreen({ route, navigation }) {
         </Modal>
       )}
 
-      {/* Alerta Institucional Reutilizable */}
       <CustomModalAlert
         visible={alerta.visible}
         tipo={alerta.tipo}
@@ -708,6 +632,36 @@ const styles = StyleSheet.create({
   iframe: { width: "100%", height: "100%", border: "none" },
   centerBox: { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
+
+  mobileMapFallback: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "#F8FAFC",
+  },
+  mobileMapTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: COLORS.textDark,
+    marginTop: 12,
+  },
+  mobileMapSubtitle: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    textAlign: "center",
+    marginTop: 4,
+    marginBottom: 20,
+  },
+  btnAppMapsMobile: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: COLORS.primaryDark,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: RADIUS.md,
+  },
 
   floatingCoordBox: {
     position: "absolute",
@@ -728,7 +682,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     color: COLORS.textDark,
-    fontFamily: "monospace",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
   },
   btnCrearCalle: {
     flexDirection: "row",
@@ -875,7 +829,7 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.sm,
   },
   modalCoordText: {
-    fontFamily: "monospace",
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
     fontSize: 12,
     color: COLORS.primaryDark,
     fontWeight: "700",
