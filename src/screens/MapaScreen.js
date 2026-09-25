@@ -1,14 +1,11 @@
 // src/screens/MapaScreen.js
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
-  StyleSheet,
   Text,
   View,
   ActivityIndicator,
   TouchableOpacity,
   ScrollView,
-  TextInput,
-  Modal,
   Linking,
   Platform,
 } from "react-native";
@@ -19,21 +16,23 @@ import {
   ChevronUp,
   MapPin,
   PlusCircle,
-  X,
   Check,
   List,
   ChevronRight,
 } from "lucide-react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import NetInfo from "@react-native-community/netinfo";
-import { WebView } from "react-native-webview";
+import VisorMapaNativo from "../components/mapa/VisorMapaNativo";
+import ModalNuevaCalle from "../components/mapa/ModalNuevaCalle";
+import HeaderInstitucional from "../components/layout/HeaderInstitucional";
+import CustomModalAlert from "../components/feedback/CustomModalAlert";
+import OfflineEmptyState from "../components/feedback/OfflineEmptyState";
 import { useAuth } from "../context/AuthContext";
 import { incidentesService } from "../services/incidentesService";
 import { callesService } from "../services/callesService";
-import HeaderInstitucional from "../components/HeaderInstitucional";
-import CustomModalAlert from "../components/CustomModalAlert";
-import OfflineEmptyState from "../components/OfflineEmptyState";
-import { COLORS, RADIUS } from "../constants/theme";
+import { generarHtmlLeaflet } from "../utils/leafletTemplate";
+import { styles } from "../styles/mapaScreen.styles";
+import { COLORS } from "../constants/theme";
 
 const LAT_DEFAULT = -17.3684722;
 const LNG_DEFAULT = -66.1638889;
@@ -108,7 +107,6 @@ export default function MapaScreen({ route, navigation }) {
     }
   }
 
-  // Procesador unificado de eventos provenientes del mapa (Web o Mobile WebView)
   const procesarEventoMapa = useCallback(
     (datos) => {
       if (!datos) return;
@@ -127,7 +125,6 @@ export default function MapaScreen({ route, navigation }) {
     [esAdmin, incidentes],
   );
 
-  // 1. Receptor de mensajes para Web (window)
   useEffect(() => {
     if (
       Platform.OS !== "web" ||
@@ -151,7 +148,6 @@ export default function MapaScreen({ route, navigation }) {
     };
   }, [procesarEventoMapa]);
 
-  // 2. Receptor de mensajes para Móvil (WebView onMessage)
   const handleMensajeWebView = (event) => {
     try {
       const datos = JSON.parse(event.nativeEvent.data);
@@ -200,9 +196,7 @@ export default function MapaScreen({ route, navigation }) {
         err.message?.toLowerCase().includes("failed to fetch") ||
         err.message?.toLowerCase().includes("network");
 
-      if (esErrorDeRed) {
-        setErrorConexion(true);
-      }
+      if (esErrorDeRed) setErrorConexion(true);
     } finally {
       setCargando(false);
     }
@@ -221,11 +215,10 @@ export default function MapaScreen({ route, navigation }) {
 
     if (Platform.OS === "web" && typeof document !== "undefined") {
       const iframe = document.getElementById("visor-leaflet-mapa");
-      if (iframe && iframe.contentWindow) {
+      if (iframe?.contentWindow) {
         iframe.contentWindow.postMessage(payload, "*");
       }
     } else if (webViewRef.current) {
-      // Inyección segura en el WebView de celular
       const jsCode = `
         if (window.volarAIncidente) {
           window.volarAIncidente(${inc.id}, ${inc.lat}, ${inc.lng});
@@ -317,189 +310,24 @@ export default function MapaScreen({ route, navigation }) {
     }
   };
 
-  const generarHtmlLeaflet = () => {
-    const latInicial =
+  const htmlLeaflet = generarHtmlLeaflet({
+    latInicial:
       Number(coordenadaMarcada?.lat) ||
       Number(incidenteActivo?.lat) ||
-      LAT_DEFAULT;
-    const lngInicial =
+      LAT_DEFAULT,
+    lngInicial:
       Number(coordenadaMarcada?.lng) ||
       Number(incidenteActivo?.lng) ||
-      LNG_DEFAULT;
-
-    const jsonIncidentes = JSON.stringify(
-      incidentes
-        .filter((i) => i.lat && i.lng)
-        .map((i) => ({
-          id: i.id,
-          lat: i.lat,
-          lng: i.lng,
-          titulo: i.titulo || "Incidente",
-          calle: i.calle_nombre || "Vía",
-          estado: i.estado || "en_revision",
-        })),
-    );
-
-    return `
-      <!DOCTYPE html>
-      <html lang="es">
-        <head>
-          <meta charset="utf-8" />
-          <title>Mapa Territorial</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-          <style>
-            * { -webkit-tap-highlight-color: transparent; }
-            html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; }
-            .leaflet-popup-content-wrapper { border-radius: 8px; font-family: system-ui, -apple-system, sans-serif; }
-            
-            .pin-alfiler-wrapper { position: relative; width: 24px; height: 36px; }
-            .pin-bolita-roja {
-              width: 16px; height: 16px;
-              background: radial-gradient(circle at 35% 35%, #EF4444, #991B1B);
-              border: 1.5px solid #FFFFFF;
-              border-radius: 50%;
-              box-shadow: 0 3px 6px rgba(0,0,0,0.35);
-              position: absolute; top: 0; left: 4px; z-index: 2;
-            }
-            .pin-aguja-metalica {
-              width: 2.5px; height: 20px;
-              background: linear-gradient(to right, #94A3B8, #475569);
-              position: absolute; top: 15px; left: 11px; border-radius: 1px; z-index: 1;
-            }
-            .pin-sombra-base {
-              width: 8px; height: 4px;
-              background: rgba(0,0,0,0.3);
-              border-radius: 50%; position: absolute; bottom: 0; left: 8px;
-            }
-
-            .pin-admin-azul {
-              width: 20px; height: 20px;
-              background: radial-gradient(circle at 35% 35%, #38BDF8, #0284C7);
-              border: 2px solid #FFFFFF;
-              border-radius: 50%;
-              box-shadow: 0 4px 8px rgba(2, 132, 199, 0.45);
-              position: absolute; top: 0; left: 2px; z-index: 3;
-            }
-            .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; }
-            .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; }
-          </style>
-        </head>
-        <body>
-          <div id="map"></div>
-          <script>
-            var esAdmin = ${esAdmin ? "true" : "false"};
-            var incidentes = ${jsonIncidentes};
-
-            function despacharMensaje(payload) {
-              var str = JSON.stringify(payload);
-              // Puente para React Native WebView (Móvil)
-              if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
-                window.ReactNativeWebView.postMessage(str);
-              }
-              // Puente para Web estándar (iframe)
-              if (window.parent && window.parent.postMessage) {
-                window.parent.postMessage(str, '*');
-              }
-            }
-
-            var map = L.map('map', { 
-              zoomControl: false,
-              tap: true,
-              touchZoom: true
-            }).setView([${latInicial}, ${lngInicial}], 16);
-
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-            L.control.zoom({ position: 'topright' }).addTo(map);
-
-            var iconoAlfilerRojo = L.divIcon({
-              className: 'alfiler-custom',
-              html: '<div class="pin-alfiler-wrapper"><div class="pin-bolita-roja"></div><div class="pin-aguja-metalica"></div><div class="pin-sombra-base"></div></div>',
-              iconSize: [24, 36],
-              iconAnchor: [12, 35],
-              popupAnchor: [0, -32]
-            });
-
-            var iconoAdminAzul = L.divIcon({
-              className: 'admin-marker-custom',
-              html: '<div class="pin-alfiler-wrapper"><div class="pin-admin-azul"></div><div class="pin-aguja-metalica"></div><div class="pin-sombra-base"></div></div>',
-              iconSize: [24, 36],
-              iconAnchor: [12, 35],
-              popupAnchor: [0, -32]
-            });
-
-            var marcadoresIncidentes = {};
-
-            incidentes.forEach(function(inc) {
-              var m = L.marker([inc.lat, inc.lng], { icon: iconoAlfilerRojo }).addTo(map);
-              var popHtml = '<div class="pop-calle">🔴 ' + (inc.calle || '') + '</div><div class="pop-tit">' + (inc.titulo || '') + '</div>';
-              m.bindPopup(popHtml);
-
-              m.on('click', function() {
-                despacharMensaje({ tipo: 'INCIDENTE_CLICKEADO', id: inc.id });
-              });
-
-              marcadoresIncidentes[inc.id] = m;
-            });
-
-            var markerAdmin = null;
-
-            if (esAdmin) {
-              markerAdmin = L.marker([${latInicial}, ${lngInicial}], { 
-                icon: iconoAdminAzul,
-                draggable: true 
-              }).addTo(map);
-
-              markerAdmin.bindPopup("<b>Ubicación Seleccionada</b><br>Arrastra o toca el mapa").openPopup();
-
-              function notificarPunto(lat, lng) {
-                despacharMensaje({ tipo: 'PUNTO_SELECCIONADO', lat: lat, lng: lng });
-              }
-
-              // Evento de toque / clic en cualquier lugar del mapa
-              map.on('click', function(e) {
-                markerAdmin.setLatLng(e.latlng);
-                notificarPunto(e.latlng.lat, e.latlng.lng);
-              });
-
-              // Evento de arrastre del pin
-              markerAdmin.on('dragend', function(e) {
-                var pos = markerAdmin.getLatLng();
-                notificarPunto(pos.lat, pos.lng);
-              });
-            }
-
-            window.volarAIncidente = function(id, lat, lng) {
-              map.flyTo([lat, lng], 17, { duration: 1.2 });
-              if (marcadoresIncidentes[id]) {
-                setTimeout(function() {
-                  marcadoresIncidentes[id].openPopup();
-                }, 1200);
-              }
-            };
-
-            window.addEventListener('message', function(event) {
-              try {
-                var d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
-                if (d.tipo === 'VOLAR_A_INCIDENTE') {
-                  window.volarAIncidente(d.id, d.lat, d.lng);
-                }
-              } catch(e) {}
-            });
-          </script>
-        </body>
-      </html>
-    `;
-  };
-
-  const tituloEncabezado = esAdmin
-    ? "Gestor Territorial (Admin)"
-    : "Mapa Territorial";
+      LNG_DEFAULT,
+    incidentes,
+    esAdmin,
+  });
 
   return (
     <View style={styles.container}>
-      <HeaderInstitucional titulo={tituloEncabezado} />
+      <HeaderInstitucional
+        titulo={esAdmin ? "Gestor Territorial (Admin)" : "Mapa Territorial"}
+      />
 
       <View style={styles.mapContainer}>
         {cargando ? (
@@ -517,29 +345,18 @@ export default function MapaScreen({ route, navigation }) {
           <iframe
             id="visor-leaflet-mapa"
             key={`mapa-${esAdmin ? "admin" : "ciudadano"}`}
-            srcDoc={generarHtmlLeaflet()}
+            srcDoc={htmlLeaflet}
             style={styles.iframe}
             title="Mapa Territorial Cochabamba D12"
           />
         ) : (
-          <WebView
-            ref={webViewRef}
-            originWhitelist={["*"]}
-            source={{ html: generarHtmlLeaflet() }}
-            style={styles.iframe}
-            javaScriptEnabled={true}
-            domStorageEnabled={true}
-            startInLoadingState={true}
+          <VisorMapaNativo
+            webViewRef={webViewRef}
+            htmlSource={htmlLeaflet}
             onMessage={handleMensajeWebView}
-            renderLoading={() => (
-              <View style={styles.centerBox}>
-                <ActivityIndicator size="large" color={COLORS.primary} />
-              </View>
-            )}
           />
         )}
 
-        {/* Panel Superior: Exclusivo del Administrador */}
         {esAdmin && coordenadaMarcada && !errorConexion && (
           <View style={styles.floatingCoordBox}>
             <View style={styles.coordRow}>
@@ -564,7 +381,6 @@ export default function MapaScreen({ route, navigation }) {
           </View>
         )}
 
-        {/* Acordeón Inferior de Incidentes */}
         {incidenteActivo && !errorConexion && (
           <View style={styles.floatingAccordionContainer}>
             <TouchableOpacity
@@ -663,102 +479,20 @@ export default function MapaScreen({ route, navigation }) {
       </View>
 
       {esAdmin && (
-        <Modal visible={modalVisible} transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Registrar Nueva Calle</Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}>
-                  <X size={20} color={COLORS.textMuted} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.modalLabel}>Coordenadas marcadas:</Text>
-              <View style={styles.modalCoordBox}>
-                <Text style={styles.modalCoordText}>
-                  {coordenadaMarcada?.lat}, {coordenadaMarcada?.lng}
-                </Text>
-              </View>
-
-              <Text style={styles.modalLabel}>Zona Municipal:</Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: 4 }}
-              >
-                <View style={{ flexDirection: "row", gap: 6 }}>
-                  {zonas.map((z) => (
-                    <TouchableOpacity
-                      key={z.id}
-                      style={[
-                        styles.chipZona,
-                        zonaSeleccionada === z.id && styles.chipZonaActiva,
-                      ]}
-                      onPress={() => setZonaSeleccionada(z.id)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipZonaText,
-                          zonaSeleccionada === z.id &&
-                            styles.chipZonaTextActiva,
-                        ]}
-                      >
-                        {z.nombre}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
-
-              <Text style={styles.modalLabel}>Nombre oficial de la vía:</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Ej: Av. América (esq. Adela Zamudio)"
-                value={nombreNuevaCalle}
-                onChangeText={setNombreNuevaCalle}
-                placeholderTextColor="#94A3B8"
-              />
-
-              <Text style={styles.modalLabel}>Tipo de vía:</Text>
-              <View style={styles.tipoRow}>
-                {["avenida", "calle", "pasaje", "plaza"].map((tipo) => (
-                  <TouchableOpacity
-                    key={tipo}
-                    style={[
-                      styles.tipoBtn,
-                      tipoNuevaCalle === tipo && styles.tipoBtnActive,
-                    ]}
-                    onPress={() => setTipoNuevaCalle(tipo)}
-                  >
-                    <Text
-                      style={[
-                        styles.tipoBtnText,
-                        tipoNuevaCalle === tipo && styles.tipoBtnTextActive,
-                      ]}
-                    >
-                      {tipo.toUpperCase()}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                style={styles.btnGuardarFinal}
-                activeOpacity={0.8}
-                onPress={handleGuardarCalle}
-                disabled={guardandoCalle}
-              >
-                {guardandoCalle ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <Text style={styles.btnGuardarFinalText}>
-                    Guardar Vía en Base de Datos
-                  </Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
+        <ModalNuevaCalle
+          visible={modalVisible}
+          onClose={() => setModalVisible(false)}
+          coordenadaMarcada={coordenadaMarcada}
+          zonas={zonas}
+          zonaSeleccionada={zonaSeleccionada}
+          onSelectZona={setZonaSeleccionada}
+          nombreNuevaCalle={nombreNuevaCalle}
+          onChangeNombre={setNombreNuevaCalle}
+          tipoNuevaCalle={tipoNuevaCalle}
+          onSelectTipo={setTipoNuevaCalle}
+          onGuardar={handleGuardarCalle}
+          guardando={guardandoCalle}
+        />
       )}
 
       <CustomModalAlert
@@ -771,253 +505,3 @@ export default function MapaScreen({ route, navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background || "#F8FAFC",
-  },
-  mapContainer: {
-    flex: 1,
-    position: "relative",
-    backgroundColor: "#F8FAFC",
-  },
-  iframe: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#F8FAFC",
-  },
-  centerBox: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#F8FAFC",
-  },
-  loadingText: { marginTop: 8, fontSize: 12, color: COLORS.textMuted },
-
-  floatingCoordBox: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    right: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.primaryLight,
-    padding: 10,
-    elevation: 6,
-    zIndex: 10,
-  },
-  coordRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  coordLabel: { fontSize: 10, fontWeight: "700", color: COLORS.textMuted },
-  coordValue: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-  },
-  btnCrearCalle: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#16A34A",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: RADIUS.sm,
-  },
-  btnCrearCalleText: { fontSize: 11, fontWeight: "800", color: "#FFFFFF" },
-
-  floatingAccordionContainer: {
-    position: "absolute",
-    bottom: 12,
-    left: 12,
-    right: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    elevation: 8,
-    overflow: "hidden",
-    zIndex: 10,
-  },
-  accordionHeader: { flexDirection: "row", alignItems: "center", padding: 12 },
-  headerCalle: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    textTransform: "uppercase",
-  },
-  headerTitulo: { fontSize: 13, fontWeight: "700", color: COLORS.textDark },
-  accordionBody: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-    backgroundColor: "#F8FAFC",
-  },
-  listItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 8,
-    borderRadius: RADIUS.sm,
-    marginBottom: 4,
-    backgroundColor: "#FFFFFF",
-  },
-  listItemActive: { backgroundColor: "#EFF6FF" },
-  listItemCalle: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.primary,
-    textTransform: "uppercase",
-  },
-  listItemTitulo: { fontSize: 12, fontWeight: "600", color: COLORS.textDark },
-  chipActivo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  chipActivoText: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: "#FFFFFF",
-  },
-  cardActionsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    backgroundColor: "#FFFFFF",
-    gap: 8,
-  },
-  btnAppMaps: {
-    flex: 1.2,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    backgroundColor: "#0F172A",
-    paddingVertical: 7,
-    borderRadius: RADIUS.sm || 6,
-  },
-  btnAppMapsText: {
-    color: "#FFFFFF",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  btnDetalleLista: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
-    backgroundColor: COLORS.primaryLight || "#DBEAFE",
-    paddingVertical: 7,
-    borderRadius: RADIUS.sm || 6,
-  },
-  btnDetalleListaText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.primaryDark || "#1E40AF",
-  },
-
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(15, 23, 42, 0.6)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-    zIndex: 20,
-  },
-  modalContent: {
-    backgroundColor: "#FFFFFF",
-    width: "100%",
-    maxWidth: 440,
-    borderRadius: RADIUS.md,
-    padding: 20,
-    elevation: 10,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  modalTitle: { fontSize: 15, fontWeight: "800", color: COLORS.textDark },
-  modalLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: COLORS.textMuted,
-    marginTop: 10,
-    marginBottom: 4,
-    textTransform: "uppercase",
-  },
-  modalCoordBox: {
-    backgroundColor: "#F1F5F9",
-    padding: 8,
-    borderRadius: RADIUS.sm,
-  },
-  modalCoordText: {
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-    fontSize: 12,
-    color: COLORS.primaryDark,
-    fontWeight: "700",
-  },
-  chipZona: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: RADIUS.sm || 6,
-    borderWidth: 1,
-    borderColor: "#CBD5E1",
-    backgroundColor: "#FFFFFF",
-  },
-  chipZonaActiva: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  chipZonaText: {
-    fontSize: 10,
-    fontWeight: "700",
-    color: "#475569",
-  },
-  chipZonaTextActiva: {
-    color: "#FFFFFF",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: COLORS.textDark,
-    backgroundColor: "#FFFFFF",
-  },
-  tipoRow: { flexDirection: "row", gap: 6, marginVertical: 6 },
-  tipoBtn: {
-    flex: 1,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-    backgroundColor: "#FFFFFF",
-  },
-  tipoBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  tipoBtnText: { fontSize: 10, fontWeight: "800", color: COLORS.textMuted },
-  tipoBtnTextActive: { color: "#FFFFFF" },
-  btnGuardarFinal: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 10,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-    marginTop: 16,
-  },
-  btnGuardarFinalText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
-});

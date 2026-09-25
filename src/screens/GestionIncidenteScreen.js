@@ -1,14 +1,12 @@
 // src/screens/GestionIncidenteScreen.js
 import React, { useEffect, useState, useRef } from "react";
 import {
-  StyleSheet,
   Text,
   View,
   TextInput,
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Linking,
   Animated,
   Platform,
 } from "react-native";
@@ -16,22 +14,20 @@ import {
   ShieldCheck,
   Building2,
   Clock,
-  ThumbsUp,
-  User,
   ChevronDown,
   ChevronUp,
   Check,
-  MapPin,
-  ExternalLink,
   FileCheck,
 } from "lucide-react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { catalogoService } from "../services/catalogoService";
 import { DictaminarIncidenteCommand } from "../services/commands/DictaminarIncidenteCommand";
 import { commandQueueService } from "../services/CommandQueueService";
-import HeaderInstitucional from "../components/HeaderInstitucional";
-import CustomModalAlert from "../components/CustomModalAlert";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import HeaderInstitucional from "../components/layout/HeaderInstitucional";
+import CustomModalAlert from "../components/feedback/CustomModalAlert";
+import ExpedienteResumenCard from "../components/formulario/ExpedienteResumenCard";
+import { styles } from "../styles/gestionIncidente.styles";
+import { COLORS } from "../constants/theme";
 
 const ESTADOS_DISPONIBLES = [
   { key: "en_revision", label: "En Revisión (Pendiente)" },
@@ -180,7 +176,6 @@ export default function GestionIncidenteScreen({ route, navigation }) {
     }
   }
 
-  // Salvaguarda visual si la pantalla se abrió sin parámetros válidos
   if (!incidente) {
     return (
       <View style={styles.centerContainer}>
@@ -223,53 +218,8 @@ export default function GestionIncidenteScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View style={{ opacity: animFade }}>
-          {/* Tarjeta Resumen */}
-          <View style={styles.summaryCard}>
-            <View style={styles.summaryInfo}>
-              <View style={styles.badgeJurisdiccion}>
-                <MapPin size={10} color={COLORS.primary} strokeWidth={2.5} />
-                <Text style={styles.summaryCalle}>
-                  {incidente.calle_nombre || "Vía Registrada"}
-                </Text>
-              </View>
-
-              <Text style={styles.summaryTitle}>{incidente.titulo}</Text>
-              <Text style={styles.summaryDesc}>{incidente.descripcion}</Text>
-
-              <View style={styles.metaRow}>
-                <View style={styles.infoLine}>
-                  <User size={11} color={COLORS.textMuted} />
-                  <Text style={styles.infoLineText}>
-                    Vecino: {incidente.usuario_nombre || "Vecino Registrado"}
-                  </Text>
-                </View>
-                <View style={styles.infoLine}>
-                  <ThumbsUp
-                    size={11}
-                    color={COLORS.primary}
-                    strokeWidth={2.2}
-                  />
-                  <Text style={styles.infoLineVotes}>
-                    {incidente.total_apoyos} respaldos
-                  </Text>
-                </View>
-              </View>
-
-              {incidente.maps_url ? (
-                <TouchableOpacity
-                  style={styles.btnAdminMaps}
-                  activeOpacity={0.7}
-                  onPress={() => Linking.openURL(incidente.maps_url)}
-                >
-                  <MapPin size={11} color="#0284C7" strokeWidth={2.2} />
-                  <Text style={styles.btnAdminMapsText}>
-                    Ver punto exacto en Google Maps
-                  </Text>
-                  <ExternalLink size={10} color="#0284C7" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          </View>
+          {/* Ficha técnica del incidente extraída */}
+          <ExpedienteResumenCard incidente={incidente} />
 
           {/* Paso 1: Departamento */}
           <View style={styles.accordionContainer}>
@@ -492,207 +442,3 @@ export default function GestionIncidenteScreen({ route, navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screenWrapper: { flex: 1, backgroundColor: COLORS.background },
-  container: { flex: 1 },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.background,
-    padding: SPACING.lg,
-  },
-  errorParamText: {
-    color: COLORS.textDark,
-    fontWeight: "700",
-    fontSize: 13,
-    textAlign: "center",
-    marginBottom: 16,
-  },
-  btnVolverFallback: {
-    backgroundColor: COLORS.primaryDark,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: RADIUS.sm,
-  },
-  btnVolverFallbackText: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-    fontSize: 12,
-  },
-  content: { padding: SPACING.lg, paddingBottom: SPACING.bottomInset || 20 },
-  summaryCard: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    elevation: 1,
-  },
-  summaryInfo: { flex: 1 },
-  badgeJurisdiccion: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#F0F9FF",
-    alignSelf: "flex-start",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: RADIUS.sm,
-    marginBottom: 6,
-  },
-  summaryCalle: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: COLORS.primary,
-    textTransform: "uppercase",
-  },
-  summaryTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    marginBottom: 4,
-  },
-  summaryDesc: {
-    fontSize: 12,
-    color: COLORS.textMuted,
-    lineHeight: 17,
-    marginBottom: 8,
-  },
-  metaRow: {
-    flexDirection: "row",
-    gap: 12,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-    marginBottom: 6,
-  },
-  infoLine: { flexDirection: "row", alignItems: "center", gap: 5 },
-  infoLineText: { fontSize: 10.5, color: COLORS.textMuted },
-  infoLineVotes: { fontSize: 10.5, fontWeight: "700", color: COLORS.primary },
-
-  btnAdminMaps: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginTop: 4,
-    backgroundColor: "#F0F9FF",
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: RADIUS.sm,
-    alignSelf: "flex-start",
-  },
-  btnAdminMapsText: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: "#0284C7",
-  },
-
-  accordionContainer: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    backgroundColor: COLORS.surface,
-    marginBottom: SPACING.sm,
-    overflow: "hidden",
-    elevation: 1,
-  },
-  accordionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: SPACING.md,
-    backgroundColor: COLORS.surface,
-  },
-  accordionHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: SPACING.sm,
-    flex: 1,
-    marginRight: 8,
-  },
-  accordionStep: {
-    fontSize: 9,
-    fontWeight: "800",
-    color: COLORS.textMuted,
-    letterSpacing: 0.5,
-  },
-  accordionValue: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    marginTop: 2,
-  },
-  accordionBody: {
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-    padding: SPACING.xs,
-    backgroundColor: "#F8FAFC",
-  },
-  optionItem: {
-    paddingVertical: 10,
-    paddingHorizontal: SPACING.sm,
-    borderRadius: RADIUS.sm,
-  },
-  optionItemActive: {
-    backgroundColor: COLORS.primaryDark,
-  },
-  optionContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  optionText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: COLORS.textDark,
-  },
-  optionTextActive: {
-    color: "#FFFFFF",
-    fontWeight: "800",
-  },
-
-  formGroup: { marginTop: SPACING.xs, marginBottom: SPACING.md },
-  formLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    marginBottom: 6,
-  },
-  formLabel: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: COLORS.textMuted,
-    letterSpacing: 0.5,
-  },
-  textarea: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    fontSize: 12,
-    color: COLORS.textDark,
-    height: 90,
-  },
-  btnSubmit: {
-    backgroundColor: COLORS.primaryDark,
-    paddingVertical: 14,
-    borderRadius: RADIUS.sm,
-    alignItems: "center",
-    marginTop: SPACING.xs,
-  },
-  btnDisabled: { opacity: 0.6 },
-  btnContent: { flexDirection: "row", alignItems: "center", gap: 8 },
-  btnSubmitText: {
-    color: "#FFFFFF",
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-});

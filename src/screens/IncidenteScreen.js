@@ -1,7 +1,6 @@
 // src/screens/IncidenteScreen.js
-import React, { useState, useRef, useCallback, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
-  StyleSheet,
   Text,
   View,
   FlatList,
@@ -9,34 +8,34 @@ import {
   RefreshControl,
   Platform,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
 import NetInfo from "@react-native-community/netinfo";
 import { useAuth } from "../context/AuthContext";
 import { incidentesService } from "../services/incidentesService";
-import { commandQueueService } from "../services/CommandQueueService";
-import HeaderInstitucional from "../components/HeaderInstitucional";
-import FiltrosAcordeon from "../components/FiltrosAcordeon";
-import IncidenteCard from "../components/IncidenteCard";
-import CustomModalAlert from "../components/CustomModalAlert";
-import OfflineEmptyState from "../components/OfflineEmptyState";
-import { COLORS, SPACING } from "../constants/theme";
+import { useIncidentesFeed } from "../hooks/useIncidentesFeed";
+import HeaderInstitucional from "../components/layout/HeaderInstitucional";
+import FiltrosAcordeon from "../components/layout/FiltrosAcordeon";
+import IncidenteCard from "../components/cards/IncidenteCard";
+import CustomModalAlert from "../components/feedback/CustomModalAlert";
+import OfflineEmptyState from "../components/feedback/OfflineEmptyState";
+import { styles } from "../styles/incidenteScreen.styles";
+import { COLORS } from "../constants/theme";
 
 export default function IncidenteScreen({ route, navigation }) {
   const { perfil } = useAuth();
   const flatListRef = useRef(null);
   const incidenteIdSeleccionado = route?.params?.incidenteIdSeleccionado;
 
-  const [incidentes, setIncidentes] = useState([]);
-  const [cargando, setCargando] = useState(true);
-  const [refrescando, setRefrescando] = useState(false);
-  const [errorConexion, setErrorConexion] = useState(false);
+  const {
+    incidentes,
+    setIncidentes,
+    incidentesFiltrados,
+    cargando,
+    refrescando,
+    errorConexion,
+    cargarIncidentes,
+    filtros,
+  } = useIncidentesFeed(perfil?.id);
 
-  // Filtros dinámicos con "Todas" por defecto
-  const [zonaFiltro, setZonaFiltro] = useState("Todas");
-  const [calleFiltro, setCalleFiltro] = useState("Todas");
-  const [categoriaFiltro, setCategoriaFiltro] = useState("Todas");
-
-  // Estado de Alerta Institucional
   const [alerta, setAlerta] = useState({
     visible: false,
     tipo: "info",
@@ -44,55 +43,7 @@ export default function IncidenteScreen({ route, navigation }) {
     mensaje: "",
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      cargarIncidentes();
-    }, [perfil?.id]),
-  );
-
-  useEffect(() => {
-    // 1. Escuchar cambios en tiempo real de Supabase
-    const cancelarSuscripcionSupabase = incidentesService.suscribirACambios(
-      () => {
-        cargarIncidentes();
-      },
-    );
-
-    // 2. Escuchar la sincronización reactiva del CommandQueue (cuando se despachan reportes offline)
-    const cancelarSuscripcionQueue = commandQueueService.suscribir((evento) => {
-      if (evento === "COMANDO_EJECUTADO") {
-        cargarIncidentes();
-      }
-    });
-
-    // 3. Listener nativo de reconexión física de red (Web y Mobile)
-    const handleReconexion = () => {
-      cargarIncidentes();
-    };
-
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      window.addEventListener("online", handleReconexion);
-    }
-
-    const desuscribirNet = NetInfo.addEventListener((state) => {
-      const hayRed = Boolean(
-        state.isConnected && state.isInternetReachable !== false,
-      );
-      if (hayRed) {
-        cargarIncidentes();
-      }
-    });
-
-    return () => {
-      cancelarSuscripcionSupabase();
-      cancelarSuscripcionQueue();
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.removeEventListener("online", handleReconexion);
-      }
-      desuscribirNet();
-    };
-  }, [perfil?.id]);
-
+  // Auto-scroll si se navegó desde el mapa con un ID seleccionado
   useEffect(() => {
     if (incidenteIdSeleccionado && incidentes.length > 0) {
       const index = incidentes.findIndex(
@@ -117,43 +68,7 @@ export default function IncidenteScreen({ route, navigation }) {
     }
   }, [incidenteIdSeleccionado, incidentes]);
 
-  async function cargarIncidentes() {
-    try {
-      setCargando(true);
-      setErrorConexion(false);
-      const datos = await incidentesService.obtenerParaFeed(perfil?.id);
-      setIncidentes(datos);
-    } catch (err) {
-      console.warn("Aviso al cargar incidentes:", err.message);
-      const esErrorDeRed =
-        err.message?.toLowerCase().includes("failed to fetch") ||
-        err.message?.toLowerCase().includes("network") ||
-        (Platform.OS === "web" &&
-          typeof navigator !== "undefined" &&
-          !navigator.onLine);
-
-      if (esErrorDeRed) {
-        setErrorConexion(true);
-      }
-    } finally {
-      setCargando(false);
-      setRefrescando(false);
-    }
-  }
-
-  // Filtrado compuesto: Zona + Calle + Categoría
-  const incidentesFiltrados = incidentes.filter((item) => {
-    const coincideZona =
-      zonaFiltro === "Todas" || item.zona_nombre === zonaFiltro;
-    const coincideCalle =
-      calleFiltro === "Todas" || item.calle_nombre === calleFiltro;
-    const coincideCat =
-      categoriaFiltro === "Todas" || item.categoria_nombre === categoriaFiltro;
-    return coincideZona && coincideCalle && coincideCat;
-  });
-
   const handleApoyar = async (incidenteId) => {
-    // 1. Verificación de sesión
     if (!perfil?.id) {
       setAlerta({
         visible: true,
@@ -165,18 +80,10 @@ export default function IncidenteScreen({ route, navigation }) {
       return;
     }
 
-    // 2. Verificación estricta de conexión a internet
-    let conexionEstable = true;
-    if (Platform.OS === "web" && typeof navigator !== "undefined") {
-      conexionEstable = navigator.onLine === true;
-    }
-
-    if (conexionEstable) {
-      const netState = await NetInfo.fetch();
-      conexionEstable = Boolean(
-        netState.isConnected && netState.isInternetReachable !== false,
-      );
-    }
+    let conexionEstable =
+      Platform.OS === "web"
+        ? typeof navigator !== "undefined" && navigator.onLine
+        : (await NetInfo.fetch()).isConnected;
 
     if (!conexionEstable) {
       setAlerta({
@@ -184,7 +91,7 @@ export default function IncidenteScreen({ route, navigation }) {
         tipo: "error",
         titulo: "Sin Conexión",
         mensaje:
-          "No tienes conexión a internet para respaldar reportes en este momento. Inténtalo cuando recuperes la red.",
+          "No tienes conexión a internet para respaldar reportes en este momento.",
       });
       return;
     }
@@ -207,29 +114,12 @@ export default function IncidenteScreen({ route, navigation }) {
         }),
       );
     } catch (err) {
-      const esErrorDeRed =
-        err.message?.toLowerCase().includes("failed to fetch") ||
-        err.message?.toLowerCase().includes("network") ||
-        (Platform.OS === "web" &&
-          typeof navigator !== "undefined" &&
-          !navigator.onLine);
-
-      if (esErrorDeRed) {
-        setAlerta({
-          visible: true,
-          tipo: "error",
-          titulo: "Sin Conexión",
-          mensaje:
-            "No tienes conexión a internet para respaldar reportes en este momento. Inténtalo cuando recuperes la red.",
-        });
-      } else {
-        setAlerta({
-          visible: true,
-          tipo: "error",
-          titulo: "Aviso",
-          mensaje: err.message || "No se pudo registrar tu respaldo.",
-        });
-      }
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Aviso",
+        mensaje: err.message || "No se pudo registrar tu respaldo.",
+      });
     }
   };
 
@@ -238,12 +128,12 @@ export default function IncidenteScreen({ route, navigation }) {
       <HeaderInstitucional titulo="Incidentes Urbanos" />
 
       <FiltrosAcordeon
-        zonaSeleccionada={zonaFiltro}
-        calleSeleccionada={calleFiltro}
-        categoriaSeleccionada={categoriaFiltro}
-        onPressZona={(zona) => setZonaFiltro(zona)}
-        onPressCalle={(calle) => setCalleFiltro(calle)}
-        onPressCategoria={(cat) => setCategoriaFiltro(cat)}
+        zonaSeleccionada={filtros.zona}
+        calleSeleccionada={filtros.calle}
+        categoriaSeleccionada={filtros.categoria}
+        onPressZona={filtros.setZona}
+        onPressCalle={filtros.setCalle}
+        onPressCategoria={filtros.setCategoria}
       />
 
       {cargando && incidentes.length === 0 ? (
@@ -256,7 +146,7 @@ export default function IncidenteScreen({ route, navigation }) {
       ) : errorConexion && incidentes.length === 0 ? (
         <OfflineEmptyState
           titulo="Modo fuera de línea"
-          mensaje="No fue posible conectar con el servidor municipal para cargar los reportes. Los incidentes que envíes se guardarán localmente."
+          mensaje="No fue posible conectar con el servidor municipal para cargar los reportes."
           onReintentar={cargarIncidentes}
         />
       ) : (
@@ -282,9 +172,7 @@ export default function IncidenteScreen({ route, navigation }) {
               }
               onApoyar={handleApoyar}
               onVerMapaApp={(id) =>
-                navigation.navigate("Mapa", {
-                  incidenteIdSeleccionado: id,
-                })
+                navigation.navigate("Mapa", { incidenteIdSeleccionado: id })
               }
             />
           )}
@@ -301,23 +189,3 @@ export default function IncidenteScreen({ route, navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: SPACING.xl,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: COLORS.textMuted,
-    fontWeight: "600",
-  },
-  listContent: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.bottomInset || 20,
-  },
-});

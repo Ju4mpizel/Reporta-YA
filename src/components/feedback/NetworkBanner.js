@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { StyleSheet, Text, Animated, View, Platform } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { WifiOff, Wifi, CheckCircle2 } from "lucide-react-native";
-import { commandQueueService } from "../services/CommandQueueService";
+import { commandQueueService } from "../../services/CommandQueueService";
 
 export default function NetworkBanner() {
   const [estadoBanner, setEstadoBanner] = useState({

@@ -1,0 +1,273 @@
+// src/styles/auth.styles.js
+import { StyleSheet } from "react-native";
+import { COLORS, RADIUS, SPACING } from "../constants/theme";
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: SPACING.lg,
+    paddingVertical: 30,
+  },
+  cardWrapper: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.xl,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SPACING.xl,
+    elevation: 4,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+  },
+  btnBack: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginBottom: SPACING.md,
+    alignSelf: "flex-start",
+  },
+  btnBackText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
+  brandContainer: {
+    alignItems: "center",
+    marginBottom: SPACING.md,
+  },
+  mainAppLogo: {
+    width: 72,
+    height: 72,
+    marginBottom: 8,
+  },
+  brandTitle: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: COLORS.textDark,
+  },
+  brandSubtitle: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: COLORS.primary,
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  formContainer: {
+    marginTop: SPACING.xs,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: COLORS.textDark,
+  },
+  formDesc: {
+    fontSize: 11.5,
+    color: COLORS.textMuted,
+    marginBottom: SPACING.md,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  inputGroup: {
+    marginBottom: SPACING.sm,
+  },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: COLORS.textDark,
+  },
+  previewCiText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+  counterText: {
+    fontSize: 10,
+    color: COLORS.textSubtle,
+    fontWeight: "600",
+  },
+  ciCompositeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ciInputWrapper: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  expedicionTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    height: 42,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: "#F8FAFC",
+  },
+  expedicionTriggerActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#F0F9FF",
+  },
+  expedicionTriggerText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.textDark,
+  },
+  dropdownDepartamentos: {
+    marginTop: 8,
+    backgroundColor: "#F8FAFC",
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+  },
+  dropdownTitle: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: COLORS.textMuted,
+    textTransform: "uppercase",
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  gridExpediciones: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  chipExpedicion: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+  },
+  chipExpedicionActive: {
+    backgroundColor: COLORS.primaryDark,
+    borderColor: COLORS.primaryDark,
+  },
+  chipExpedicionText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.textDark,
+  },
+  chipExpedicionTextActive: {
+    color: "#FFFFFF",
+  },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: SPACING.sm,
+  },
+  inputWrapperError: {
+    borderColor: "#DC2626",
+    backgroundColor: "#FEF2F2",
+  },
+  inputIcon: {
+    marginRight: 6,
+  },
+  input: {
+    flex: 1,
+    paddingVertical: 9.5,
+    fontSize: 13,
+    color: COLORS.textDark,
+  },
+  errorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    marginLeft: 2,
+  },
+  errorText: {
+    fontSize: 10.5,
+    color: "#DC2626",
+    fontWeight: "600",
+  },
+  helperText: {
+    fontSize: 10,
+    color: COLORS.textSubtle,
+    marginTop: 3,
+    marginLeft: 2,
+  },
+  btnSubmit: {
+    backgroundColor: COLORS.primaryDark,
+    paddingVertical: 13.5,
+    borderRadius: RADIUS.sm,
+    alignItems: "center",
+    marginTop: SPACING.sm,
+  },
+  btnDisabled: {
+    opacity: 0.6,
+  },
+  btnContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  btnSubmitText: {
+    color: COLORS.textWhite,
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  linkWrapper: {
+    marginTop: SPACING.md,
+    alignItems: "center",
+  },
+  linkText: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  linkBold: {
+    fontWeight: "800",
+    color: COLORS.primary,
+    textDecorationLine: "underline",
+  },
+  cochaFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: SPACING.lg,
+    paddingTop: SPACING.md,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.borderLight,
+  },
+  footerAlcaldiaImg: {
+    width: 60,
+    height: 26,
+  },
+  footerAlcaldiaTitle: {
+    fontSize: 8.5,
+    fontWeight: "900",
+    color: COLORS.textDark,
+    letterSpacing: 0.3,
+  },
+  footerAlcaldiaSub: {
+    fontSize: 8,
+    color: COLORS.textMuted,
+    fontWeight: "600",
+  },
+});

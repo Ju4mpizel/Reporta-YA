@@ -7,7 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import NetInfo from "@react-native-community/netinfo";
 import { AuthProvider } from "./src/context/AuthContext";
 import AppNavigator from "./src/navigation/AppNavigator";
-import NetworkBanner from "./src/components/NetworkBanner";
+import NetworkBanner from "./src/components/feedback/NetworkBanner";
 import { commandQueueService } from "./src/services/CommandQueueService";
 import { catalogoService } from "./src/services/catalogoService";
 

@@ -15,7 +15,7 @@ import {
   User,
   ShieldAlert,
 } from "lucide-react-native";
-import { COLORS } from "../constants/theme";
+import { COLORS } from "../../constants/theme";
 
 export default function CustomTabBar({ state, descriptors, navigation }) {
   const insets = useSafeAreaInsets();

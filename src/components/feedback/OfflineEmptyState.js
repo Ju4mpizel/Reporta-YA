@@ -1,8 +1,8 @@
-// src/components/OfflineEmptyState.js
+// src/components/feedback/OfflineEmptyState.js
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { WifiOff, RefreshCw } from "lucide-react-native";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import { COLORS, RADIUS, SPACING } from "../../constants/theme";
 
 export default function OfflineEmptyState({
   titulo = "Sin conexión a internet",

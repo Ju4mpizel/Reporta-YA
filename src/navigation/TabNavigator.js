@@ -1,7 +1,7 @@
 // src/navigation/TabNavigator.js
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import CustomTabBar from "../components/CustomTabBar";
+import CustomTabBar from "../components/layout/CustomTabBar";
 import { useAuth } from "../context/AuthContext";
 
 import NuevoIncidenteScreen from "../screens/NuevoIncidenteScreen";

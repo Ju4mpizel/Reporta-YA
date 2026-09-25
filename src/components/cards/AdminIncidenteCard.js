@@ -16,8 +16,8 @@ import {
   Trash2,
   ImageOff,
 } from "lucide-react-native";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
-import { getBadgeConfig } from "../utils/statusBadges";
+import { COLORS, RADIUS, SPACING } from "../../constants/theme";
+import { getBadgeConfig } from "../../utils/statusBadges";
 
 export default function AdminIncidenteCard({
   item,

@@ -1,8 +1,8 @@
-// src/components/HeaderInstitucional.js
+// src/components/layout/HeaderInstitucional.js
 import React from "react";
 import { StyleSheet, Text, View, TouchableOpacity, Image } from "react-native";
 import { ArrowLeft, ShieldCheck } from "lucide-react-native";
-import { RADIUS, SPACING } from "../constants/theme";
+import { RADIUS, SPACING } from "../../constants/theme";
 
 export default function HeaderInstitucional({
   titulo,
@@ -25,7 +25,7 @@ export default function HeaderInstitucional({
 
       <View style={styles.brandRow}>
         <Image
-          source={require("../../assets/logo-reportaya.png")}
+          source={require("../../../assets/logo-reportaya.png")}
           style={styles.appLogo}
           resizeMode="contain"
         />

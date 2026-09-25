@@ -1,7 +1,6 @@
 // src/screens/AdminPanelScreen.js
 import React, { useState, useCallback, useEffect } from "react";
 import {
-  StyleSheet,
   Text,
   View,
   FlatList,
@@ -11,12 +10,14 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { incidentesService } from "../services/incidentesService";
-import FiltrosAcordeon from "../components/FiltrosAcordeon";
-import HeaderInstitucional from "../components/HeaderInstitucional";
-import AdminIncidenteCard from "../components/AdminIncidenteCard";
-import CustomModalAlert from "../components/CustomModalAlert";
-import OfflineEmptyState from "../components/OfflineEmptyState";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import FiltrosAcordeon from "../components/layout/FiltrosAcordeon";
+import HeaderInstitucional from "../components/layout/HeaderInstitucional";
+import AdminIncidenteCard from "../components/cards/AdminIncidenteCard";
+import CustomModalAlert from "../components/feedback/CustomModalAlert";
+import OfflineEmptyState from "../components/feedback/OfflineEmptyState";
+import AdminMetricasOperativas from "../components/admin/AdminMetricasOperativas";
+import { styles } from "../styles/adminPanel.styles";
+import { COLORS } from "../constants/theme";
 
 export default function AdminPanelScreen({ navigation }) {
   const [incidentes, setIncidentes] = useState([]);
@@ -155,21 +156,12 @@ export default function AdminPanelScreen({ navigation }) {
     <View style={styles.container}>
       <HeaderInstitucional titulo="Bandeja de Incidentes" />
 
-      {/* Métricas Operativas */}
-      <View style={styles.statsContainer}>
-        <View style={[styles.statBox, styles.statBoxAmber]}>
-          <Text style={[styles.statNum, { color: "#D97706" }]}>{nuevos}</Text>
-          <Text style={styles.statLabel}>Nuevos</Text>
-        </View>
-        <View style={[styles.statBox, styles.statBoxBlue]}>
-          <Text style={[styles.statNum, { color: "#2563EB" }]}>{enCurso}</Text>
-          <Text style={styles.statLabel}>En Cuadrilla</Text>
-        </View>
-        <View style={[styles.statBox, styles.statBoxGreen]}>
-          <Text style={[styles.statNum, { color: "#059669" }]}>{hechos}</Text>
-          <Text style={styles.statLabel}>Resueltos</Text>
-        </View>
-      </View>
+      {/* Métricas Operativas Extraídas */}
+      <AdminMetricasOperativas
+        nuevos={nuevos}
+        enCurso={enCurso}
+        hechos={hechos}
+      />
 
       <FiltrosAcordeon
         zonaSeleccionada={zonaFiltro}
@@ -236,57 +228,3 @@ export default function AdminPanelScreen({ navigation }) {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  statsContainer: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.xs,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 10,
-    alignItems: "center",
-    elevation: 1,
-  },
-  statBoxAmber: { backgroundColor: "#FFFBEB", borderColor: "#FDE68A" },
-  statBoxBlue: { backgroundColor: "#EFF6FF", borderColor: "#BFDBFE" },
-  statBoxGreen: { backgroundColor: "#ECFDF5", borderColor: "#A7F3D0" },
-  statNum: { fontSize: 20, fontWeight: "900" },
-  statLabel: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: COLORS.textMuted,
-    marginTop: 2,
-    textTransform: "uppercase",
-  },
-  listHeaderRow: {
-    paddingHorizontal: SPACING.lg,
-    marginTop: SPACING.sm,
-    marginBottom: 4,
-  },
-  listSubtitle: {
-    fontSize: 9.5,
-    fontWeight: "800",
-    color: COLORS.textMuted,
-    letterSpacing: 0.6,
-  },
-  centerContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: COLORS.textMuted,
-    fontWeight: "600",
-  },
-  listContent: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.bottomInset || 20,
-  },
-});

@@ -7,7 +7,7 @@ import {
   Info,
   HelpCircle,
 } from "lucide-react-native";
-import { COLORS, RADIUS } from "../constants/theme";
+import { COLORS, RADIUS } from "../../constants/theme";
 
 export default function CustomModalAlert({
   visible,

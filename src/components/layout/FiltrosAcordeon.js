@@ -15,8 +15,8 @@ import {
   ChevronUp,
   Check,
 } from "lucide-react-native";
-import { supabase } from "../services/supabase";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import { supabase } from "../../services/supabase";
+import { COLORS, RADIUS, SPACING } from "../../constants/theme";
 
 export default function FiltrosAcordeon({
   zonaSeleccionada = "Todas",

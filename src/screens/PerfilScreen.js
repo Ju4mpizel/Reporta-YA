@@ -1,32 +1,24 @@
 // src/screens/PerfilScreen.js
 import React, { useEffect, useState, useRef } from "react";
 import {
-  StyleSheet,
   Text,
   View,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   Animated,
   Platform,
 } from "react-native";
-import {
-  User,
-  Phone,
-  MapPin,
-  Calendar,
-  LogOut,
-  FileText,
-  AlertCircle,
-  ShieldCheck,
-  Award,
-  Clock,
-} from "lucide-react-native";
+import { LogOut, AlertCircle } from "lucide-react-native";
 import { supabase } from "../services/supabase";
 import { useAuth } from "../context/AuthContext";
-import HeaderInstitucional from "../components/HeaderInstitucional";
-import CustomModalAlert from "../components/CustomModalAlert";
-import { COLORS, RADIUS, SPACING } from "../constants/theme";
+import HeaderInstitucional from "../components/layout/HeaderInstitucional";
+import CustomModalAlert from "../components/feedback/CustomModalAlert";
+import PerfilCredencialCard from "../components/perfil/PerfilCredencialCard";
+import PerfilMetricas from "../components/perfil/PerfilMetricas";
+import PerfilInfoCard from "../components/perfil/PerfilInfoCard";
+import PerfilHistorialItem from "../components/perfil/PerfilHistorialItem";
+import { styles } from "../styles/perfilScreen.styles";
+import { COLORS } from "../constants/theme";
 
 export default function PerfilScreen() {
   const { perfil, logout } = useAuth();
@@ -36,9 +28,6 @@ export default function PerfilScreen() {
     resueltos: 0,
   });
   const [misIncidentes, setMisIncidentes] = useState([]);
-  const [cargando, setCargando] = useState(true);
-
-  // Modal institucional
   const [modalLogout, setModalLogout] = useState(false);
 
   const animFade = useRef(new Animated.Value(0)).current;
@@ -62,44 +51,32 @@ export default function PerfilScreen() {
   useEffect(() => {
     if (perfil?.id) {
       cargarIncidentesUsuario();
-    } else {
-      setCargando(false);
     }
-  }, [perfil]);
+  }, [perfil?.id]);
 
   async function cargarIncidentesUsuario() {
     try {
-      setCargando(true);
-      const { data: incidentesData, error: incError } = await supabase
+      const { data, error } = await supabase
         .from("incidentes")
-        .select(
-          `
-          id,
-          titulo,
-          estado,
-          created_at,
-          calles ( nombre )
-        `,
-        )
+        .select(`id, titulo, estado, created_at, calles ( nombre )`)
         .eq("usuario_id", perfil.id)
         .order("created_at", { ascending: false });
 
-      if (incError) throw incError;
+      if (error) throw error;
 
-      const items = incidentesData || [];
+      const items = data || [];
       setMisIncidentes(items);
 
-      const total = items.length;
-      const enProceso = items.filter(
-        (i) => i.estado === "en_revision" || i.estado === "realizando_trabajos",
-      ).length;
-      const resueltos = items.filter((i) => i.estado === "hecho").length;
-
-      setMetricas({ total, enProceso, resueltos });
+      setMetricas({
+        total: items.length,
+        enProceso: items.filter(
+          (i) =>
+            i.estado === "en_revision" || i.estado === "realizando_trabajos",
+        ).length,
+        resueltos: items.filter((i) => i.estado === "hecho").length,
+      });
     } catch (err) {
       console.error("Error al cargar incidentes de usuario:", err.message);
-    } finally {
-      setCargando(false);
     }
   }
 
@@ -113,121 +90,18 @@ export default function PerfilScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Animated.View
-          style={{
-            opacity: animFade,
-            transform: [{ translateY: animSlide }],
-          }}
+          style={{ opacity: animFade, transform: [{ translateY: animSlide }] }}
         >
           {/* Tarjeta de Identidad */}
-          <View style={styles.identityCard}>
-            <View style={styles.avatarWrap}>
-              <View style={styles.avatarCircle}>
-                <User size={38} color="#FFFFFF" strokeWidth={2.2} />
-              </View>
-              <View style={styles.activeBadge}>
-                <ShieldCheck size={11} color="#FFFFFF" strokeWidth={2.5} />
-              </View>
-            </View>
-
-            <Text style={styles.userName}>
-              {perfil?.nombre_completo || "Vecino Registrado"}
-            </Text>
-            <Text style={styles.userJurisdiccion}>
-              Distrito Municipal 12 · Cala Cala
-            </Text>
-
-            <View style={styles.badgesRow}>
-              <View style={styles.roleBadge}>
-                <Award size={12} color="#0284C7" strokeWidth={2.4} />
-                <Text style={styles.roleText}>
-                  {(
-                    perfil?.roles?.nombre ||
-                    perfil?.rol_id ||
-                    "Ciudadano"
-                  ).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.statusBadge}>
-                <View style={styles.statusDot} />
-                <Text style={styles.statusText}>
-                  {perfil?.activo ? "ACTIVO" : "INACTIVO"}
-                </Text>
-              </View>
-            </View>
-          </View>
+          <PerfilCredencialCard perfil={perfil} />
 
           {/* Métricas */}
-          <View style={styles.statsContainer}>
-            <View style={styles.statBox}>
-              <Text style={styles.statNum}>{metricas.total}</Text>
-              <Text style={styles.statLabel}>Reportados</Text>
-            </View>
-            <View style={[styles.statBox, styles.statBoxActive]}>
-              <Text style={[styles.statNum, { color: COLORS.amber }]}>
-                {metricas.enProceso}
-              </Text>
-              <Text style={styles.statLabel}>En Proceso</Text>
-            </View>
-            <View style={[styles.statBox, styles.statBoxDone]}>
-              <Text style={[styles.statNum, { color: "#059669" }]}>
-                {metricas.resueltos}
-              </Text>
-              <Text style={styles.statLabel}>Resueltos</Text>
-            </View>
-          </View>
+          <PerfilMetricas metricas={metricas} />
 
-          {/* Datos de Registro */}
-          <View style={styles.infoCard}>
-            <Text style={styles.cardSectionTitle}>DATOS DEL REGISTRO</Text>
+          {/* Datos del Registro */}
+          <PerfilInfoCard perfil={perfil} />
 
-            <View style={styles.infoRow}>
-              <View style={styles.iconLabel}>
-                <View style={styles.iconWrapMini}>
-                  <FileText size={14} color="#0284C7" />
-                </View>
-                <Text style={styles.labelText}>Cédula de Identidad</Text>
-              </View>
-              <Text style={styles.valueText}>{perfil?.ci || "Sin CI"}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconLabel}>
-                <View style={styles.iconWrapMini}>
-                  <Phone size={14} color="#0284C7" />
-                </View>
-                <Text style={styles.labelText}>Teléfono de Contacto</Text>
-              </View>
-              <Text style={styles.valueText}>
-                {perfil?.telefono || "No asignado"}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconLabel}>
-                <View style={styles.iconWrapMini}>
-                  <MapPin size={14} color="#0284C7" />
-                </View>
-                <Text style={styles.labelText}>Jurisdicción Asignada</Text>
-              </View>
-              <Text style={styles.valueText}>Cochabamba - D12</Text>
-            </View>
-
-            <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-              <View style={styles.iconLabel}>
-                <View style={styles.iconWrapMini}>
-                  <Calendar size={14} color="#0284C7" />
-                </View>
-                <Text style={styles.labelText}>Fecha de Alta</Text>
-              </View>
-              <Text style={styles.valueText}>
-                {perfil?.created_at
-                  ? new Date(perfil.created_at).toLocaleDateString()
-                  : "2026"}
-              </Text>
-            </View>
-          </View>
-
-          {/* Historial */}
+          {/* Historial Reciente */}
           <Text style={styles.sectionHeader}>HISTORIAL RECIENTE</Text>
           {misIncidentes.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -237,49 +111,9 @@ export default function PerfilScreen() {
               </Text>
             </View>
           ) : (
-            misIncidentes.slice(0, 3).map((item) => (
-              <View key={item.id} style={styles.historyCard}>
-                <View style={styles.historyTop}>
-                  <Text style={styles.historyStreet}>
-                    {item.calles?.nombre || "Vía de Cala Cala"}
-                  </Text>
-                  <View
-                    style={[
-                      styles.historyBadgeWrap,
-                      item.estado === "hecho"
-                        ? { backgroundColor: "#DCFCE7" }
-                        : item.estado === "realizando_trabajos"
-                          ? { backgroundColor: "#DBEAFE" }
-                          : { backgroundColor: "#FEF3C7" },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.historyBadgeText,
-                        item.estado === "hecho"
-                          ? { color: "#15803D" }
-                          : item.estado === "realizando_trabajos"
-                            ? { color: "#1D4ED8" }
-                            : { color: "#B45309" },
-                      ]}
-                    >
-                      {item.estado === "hecho"
-                        ? "RESUELTO"
-                        : item.estado === "realizando_trabajos"
-                          ? "EN TRABAJOS"
-                          : "EN REVISIÓN"}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={styles.historyTitle}>{item.titulo}</Text>
-                <View style={styles.historyFooter}>
-                  <Clock size={11} color={COLORS.textSubtle} />
-                  <Text style={styles.historyDate}>
-                    {new Date(item.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-            ))
+            misIncidentes
+              .slice(0, 3)
+              .map((item) => <PerfilHistorialItem key={item.id} item={item} />)
           )}
 
           {/* Botón Logout */}
@@ -294,7 +128,6 @@ export default function PerfilScreen() {
         </Animated.View>
       </ScrollView>
 
-      {/* Alerta Institucional de Confirmación de Logout */}
       <CustomModalAlert
         visible={modalLogout}
         tipo="confirmar"
@@ -311,244 +144,3 @@ export default function PerfilScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  screenWrapper: { flex: 1, backgroundColor: COLORS.background },
-  container: { flex: 1 },
-  content: {
-    padding: SPACING.lg,
-    paddingBottom: SPACING.bottomInset || 24,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.background,
-  },
-  loadingText: { marginTop: 10, fontSize: 12, color: COLORS.textMuted },
-  identityCard: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.lg,
-    alignItems: "center",
-    marginBottom: SPACING.md,
-    elevation: 2,
-    shadowColor: "#0F172A",
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-  },
-  avatarWrap: {
-    position: "relative",
-    marginBottom: SPACING.sm,
-  },
-  avatarCircle: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: "#0F172A",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#38BDF8",
-  },
-  activeBadge: {
-    position: "absolute",
-    bottom: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "#16A34A",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
-  },
-  userName: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: COLORS.textDark,
-    marginBottom: 2,
-  },
-  userJurisdiccion: {
-    fontSize: 11,
-    color: COLORS.textMuted,
-    fontWeight: "600",
-    marginBottom: 10,
-  },
-  badgesRow: { flexDirection: "row", gap: 8 },
-  roleBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: "#E0F2FE",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
-  },
-  roleText: { color: "#0369A1", fontSize: 9.5, fontWeight: "800" },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "#F0FDF4",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: RADIUS.pill,
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#16A34A",
-  },
-  statusText: { color: "#15803D", fontSize: 9.5, fontWeight: "800" },
-  statsContainer: {
-    flexDirection: "row",
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    paddingVertical: 12,
-    alignItems: "center",
-    elevation: 1,
-  },
-  statBoxActive: {
-    backgroundColor: "#FFFBEB",
-    borderColor: "#FDE68A",
-  },
-  statBoxDone: {
-    backgroundColor: "#ECFDF5",
-    borderColor: "#A7F3D0",
-  },
-  statNum: { fontSize: 20, fontWeight: "900", color: COLORS.textDark },
-  statLabel: {
-    fontSize: 9.5,
-    fontWeight: "700",
-    color: COLORS.textMuted,
-    marginTop: 2,
-    textTransform: "uppercase",
-  },
-  infoCard: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-    elevation: 1,
-  },
-  cardSectionTitle: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: SPACING.sm,
-  },
-  infoRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 9,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderLight,
-  },
-  iconLabel: { flexDirection: "row", alignItems: "center", gap: 8 },
-  iconWrapMini: {
-    width: 26,
-    height: 26,
-    borderRadius: 6,
-    backgroundColor: "#F0F9FF",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  labelText: { fontSize: 11.5, fontWeight: "600", color: COLORS.textMuted },
-  valueText: { fontSize: 12, fontWeight: "800", color: COLORS.textDark },
-  sectionHeader: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.textMuted,
-    letterSpacing: 0.8,
-    marginBottom: SPACING.xs,
-    marginLeft: 4,
-  },
-  historyCard: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    padding: SPACING.md,
-    marginBottom: SPACING.xs,
-    elevation: 1,
-  },
-  historyTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  historyStreet: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: COLORS.primary,
-    textTransform: "uppercase",
-  },
-  historyBadgeWrap: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  historyBadgeText: { fontSize: 8.5, fontWeight: "800" },
-  historyTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: COLORS.textDark,
-    marginBottom: 4,
-  },
-  historyFooter: { flexDirection: "row", alignItems: "center", gap: 4 },
-  historyDate: { fontSize: 10, color: COLORS.textSubtle },
-  emptyCard: {
-    padding: SPACING.lg,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: RADIUS.md,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginBottom: SPACING.md,
-  },
-  emptyText: { fontSize: 11, color: COLORS.textMuted, fontWeight: "600" },
-  btnLogout: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: "#FEF2F2",
-    borderWidth: 1,
-    borderColor: "#FECACA",
-    borderRadius: RADIUS.md,
-    paddingVertical: 13,
-    marginTop: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  btnLogoutText: {
-    fontSize: 11.5,
-    fontWeight: "800",
-    color: "#DC2626",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-});

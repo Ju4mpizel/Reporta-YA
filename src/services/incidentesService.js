@@ -1,4 +1,5 @@
 // src/services/incidentesService.js
+import { Platform } from "react-native";
 import { supabase } from "./supabase";
 
 const CLOUDINARY_CLOUD_NAME = "ajhdqneu";
@@ -11,11 +12,18 @@ export const incidentesService = {
     try {
       const formData = new FormData();
 
-      if (typeof window !== "undefined" && localUri.startsWith("blob:")) {
+      // 1. Caso Web con Blobs nativos
+      if (Platform.OS === "web" && localUri.startsWith("blob:")) {
         const respuesta = await fetch(localUri);
         const blob = await respuesta.blob();
         formData.append("file", blob);
-      } else {
+      }
+      // 2. Caso Base64 (Universal y compatible con Android/iOS sin error de FormDataPart)
+      else if (localUri.startsWith("data:")) {
+        formData.append("file", localUri);
+      }
+      // 3. Fallback para URIs de archivo estándar
+      else {
         const extension = localUri.split(".").pop() || "jpg";
         formData.append("file", {
           uri: localUri,
@@ -31,6 +39,9 @@ export const incidentesService = {
         {
           method: "POST",
           body: formData,
+          headers: {
+            Accept: "application/json",
+          },
         },
       );
 
@@ -41,6 +52,7 @@ export const incidentesService = {
       return null;
     }
   },
+
   async obtenerParaFeed(usuarioIdActual = null) {
     const { data, error } = await supabase
       .from("incidentes")
@@ -112,7 +124,6 @@ export const incidentesService = {
 
     const incId = Number(incidenteId);
 
-    // Consulta adaptada a la clave compuesta real (usuario_id)
     const { data: existentes, error: consultaErr } = await supabase
       .from("apoyos_incidente")
       .select("usuario_id")
