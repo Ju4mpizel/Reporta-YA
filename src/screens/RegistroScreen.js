@@ -145,16 +145,14 @@ export default function RegistroScreen({ navigation }) {
   const verificarCiExistente = async (ciCompleto) => {
     try {
       setVerificandoCI(true);
-      const { data, error } = await supabase
-        .from("perfiles")
-        .select("id")
-        .eq("ci", ciCompleto)
-        .maybeSingle();
+      const { data, error } = await supabase.rpc("verificar_ci_existe", {
+        p_ci: ciCompleto.trim(),
+      });
 
       if (error) throw error;
       return Boolean(data);
     } catch (err) {
-      console.warn("Fallo comprobación de CI:", err.message);
+      console.warn("Fallo comprobación de CI vía RPC:", err.message);
       return false;
     } finally {
       setVerificandoCI(false);
@@ -223,14 +221,24 @@ export default function RegistroScreen({ navigation }) {
         onConfirmar: () => navigation.navigate("Login"),
       });
     } catch (err) {
-      setAlerta({
-        visible: true,
-        tipo: "error",
-        titulo: "Error en el Registro",
-        mensaje:
-          err.message || "Ocurrió un error al procesar el empadronamiento.",
-        onConfirmar: null,
-      });
+      const msg = err.message || "";
+      if (msg.includes("CARNET_DUPLICADO")) {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Carnet ya Empadronado",
+          mensaje: `El documento ${ciCompleto} ya se encuentra registrado en el sistema.`,
+          onConfirmar: null,
+        });
+      } else {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Error en el Registro",
+          mensaje: msg || "Ocurrió un error al procesar el empadronamiento.",
+          onConfirmar: null,
+        });
+      }
     }
   };
 

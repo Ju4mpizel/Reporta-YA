@@ -34,66 +34,76 @@ export const authService = {
     }
   },
 
-  // Validar credenciales contra la tabla perfiles
+  // Validar credenciales contra la RPC segura en el servidor
   async login(ci, password) {
-    const { data, error } = await supabase
-      .from("perfiles")
-      .select("*, roles(id, nombre, descripcion)") // Corregido: sin columna 'codigo'
-      .eq("ci", ci.trim())
-      .eq("password", password.trim())
-      .maybeSingle();
-
-    if (error) throw error;
-    if (!data) throw new Error("Cédula de identidad o contraseña incorrecta.");
-    if (!data.activo) throw new Error("Esta cuenta se encuentra inhabilitada.");
-
-    await this.guardarSesionLocal(data);
-    return data;
-  },
-
-  // Registrar un nuevo vecino
-  async registrar({ ci, nombreCompleto, telefono, password }) {
-    const { data: existente } = await supabase
-      .from("perfiles")
-      .select("id")
-      .eq("ci", ci.trim())
-      .maybeSingle();
-
-    if (existente) {
-      throw new Error("Ya existe una cuenta con este número de CI.");
-    }
-
-    const { data, error } = await supabase
-      .from("perfiles")
-      .insert([
-        {
-          ci: ci.trim(),
-          nombre_completo: nombreCompleto.trim(),
-          telefono: telefono ? telefono.trim() : null,
-          password: password.trim(),
-          rol_id: "ciudadano", // Corregido: coincide con la clave primaria de 'roles'
-          activo: true,
-        },
-      ])
-      .select("*, roles(id, nombre, descripcion)")
-      .single();
+    const { data, error } = await supabase.rpc("login_usuario", {
+      p_ci: ci.trim(),
+      p_password: password.trim(),
+    });
 
     if (error) {
-      if (error.code === "23505") {
-        throw new Error("Ya existe una cuenta con este número de CI.");
-      }
-      throw error;
+      throw new Error(
+        error.message || "Credenciales incorrectas o cuenta inhabilitada.",
+      );
     }
 
-    await this.guardarSesionLocal(data);
-    return data;
+    const perfil = Array.isArray(data) ? data[0] : data;
+    if (!perfil) {
+      throw new Error("CI_NO_ENCONTRADO");
+    }
+
+    // Normalizar objeto de roles para la navegación y contexto
+    const perfilFormateado = {
+      ...perfil,
+      roles: {
+        id: perfil.rol_id,
+        nombre: perfil.rol_nombre,
+      },
+    };
+
+    await this.guardarSesionLocal(perfilFormateado);
+    return perfilFormateado;
+  },
+
+  // Registrar un nuevo vecino mediante la RPC segura
+  async registrar({ ci, nombreCompleto, telefono, password }) {
+    const { data, error } = await supabase.rpc("registrar_usuario", {
+      p_ci: ci.trim(),
+      p_nombre_completo: nombreCompleto.trim(),
+      p_telefono: telefono ? telefono.trim() : null,
+      p_password: password.trim(),
+    });
+
+    if (error) {
+      if (
+        error.code === "23505" ||
+        /CARNET_DUPLICADO|ya existe/i.test(error.message)
+      ) {
+        throw new Error("CARNET_DUPLICADO");
+      }
+      throw new Error(error.message || "Error al procesar el empadronamiento.");
+    }
+
+    const perfil = Array.isArray(data) ? data[0] : data;
+    const perfilFormateado = {
+      ...perfil,
+      roles: {
+        id: perfil.rol_id,
+        nombre: perfil.rol_nombre,
+      },
+    };
+
+    await this.guardarSesionLocal(perfilFormateado);
+    return perfilFormateado;
   },
 
   // Recargar datos actualizados del perfil desde la BD
   async recargarPerfil(usuarioId) {
     const { data, error } = await supabase
       .from("perfiles")
-      .select("*, roles(id, nombre, descripcion)")
+      .select(
+        "id, ci, nombre_completo, telefono, rol_id, activo, roles(id, nombre, descripcion)",
+      )
       .eq("id", usuarioId)
       .single();
 

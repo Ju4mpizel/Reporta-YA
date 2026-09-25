@@ -92,13 +92,22 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleLogin = async () => {
-    if (!ciNumero.trim() || !password.trim()) {
+    if (!ciNumero.trim()) {
       setAlerta({
         visible: true,
         tipo: "error",
-        titulo: "Campos Requeridos",
-        mensaje:
-          "Por favor ingresa tu número de cédula de identidad y tu contraseña de acceso.",
+        titulo: "Cédula Requerida",
+        mensaje: "Por favor ingresa tu número de cédula de identidad.",
+      });
+      return;
+    }
+
+    if (!password.trim()) {
+      setAlerta({
+        visible: true,
+        tipo: "error",
+        titulo: "Contraseña Requerida",
+        mensaje: "Por favor ingresa tu contraseña de acceso.",
       });
       return;
     }
@@ -108,13 +117,41 @@ export default function LoginScreen({ navigation }) {
     try {
       await login(ciCompleto, password);
     } catch (err) {
-      setAlerta({
-        visible: true,
-        tipo: "error",
-        titulo: "Acceso Denegado",
-        mensaje:
-          err.message || "Credenciales incorrectas o cuenta inhabilitada.",
-      });
+      const msg = err.message || "";
+
+      if (msg.includes("CI_NO_ENCONTRADO")) {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Cédula no Registrada",
+          mensaje: `El documento ${ciCompleto} no se encuentra registrado en el sistema del Distrito 12. Regístrate antes de ingresar.`,
+        });
+      } else if (msg.includes("PASSWORD_INCORRECTO")) {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Contraseña Incorrecta",
+          mensaje:
+            "La contraseña ingresada no coincide con el registro de este carnet de identidad. Verifica tus datos e intenta nuevamente.",
+        });
+      } else if (msg.includes("CUENTA_INHABILITADA")) {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Cuenta Inhabilitada",
+          mensaje:
+            "Tu cuenta ha sido temporalmente inhabilitada por la administración de la Subalcaldía.",
+        });
+      } else {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Acceso Denegado",
+          mensaje:
+            msg ||
+            "No fue posible verificar tus credenciales. Revisa tu conexión a internet.",
+        });
+      }
     }
   };
 
@@ -153,7 +190,7 @@ export default function LoginScreen({ navigation }) {
               incidentes
             </Text>
 
-            {/* Input compuesto de Cédula de Identidad con Selector */}
+            {/* Input compuesto de CI con Selector de Expedición */}
             <View style={styles.inputGroup}>
               <View style={styles.labelRow}>
                 <Text style={styles.inputLabel}>Cédula de Identidad (CI)</Text>
@@ -205,7 +242,6 @@ export default function LoginScreen({ navigation }) {
                 </TouchableOpacity>
               </View>
 
-              {/* Menú selector de departamentos emisores */}
               {menuExpedicionAbierto && (
                 <View style={styles.dropdownDepartamentos}>
                   <Text style={styles.dropdownTitle}>Lugar de Expedición:</Text>
