@@ -1,5 +1,5 @@
 // src/screens/MapaScreen.js
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -40,6 +40,7 @@ const LNG_DEFAULT = -66.1638889;
 
 export default function MapaScreen({ route, navigation }) {
   const { perfil } = useAuth();
+  const webViewRef = useRef(null);
 
   useEffect(() => {
     if (Platform.OS === "web" && typeof document !== "undefined") {
@@ -107,7 +108,26 @@ export default function MapaScreen({ route, navigation }) {
     }
   }
 
-  // Listener exclusivo para entorno Web
+  // Procesador unificado de eventos provenientes del mapa (Web o Mobile WebView)
+  const procesarEventoMapa = useCallback(
+    (datos) => {
+      if (!datos) return;
+      if (datos.tipo === "PUNTO_SELECCIONADO" && esAdmin) {
+        setCoordenadaMarcada({
+          lat: Number(Number(datos.lat).toFixed(7)),
+          lng: Number(Number(datos.lng).toFixed(7)),
+        });
+      } else if (datos.tipo === "INCIDENTE_CLICKEADO") {
+        const encontrado = incidentes.find(
+          (i) => Number(i.id) === Number(datos.id),
+        );
+        if (encontrado) setIncidenteActivo(encontrado);
+      }
+    },
+    [esAdmin, incidentes],
+  );
+
+  // 1. Receptor de mensajes para Web (window)
   useEffect(() => {
     if (
       Platform.OS !== "web" ||
@@ -121,17 +141,7 @@ export default function MapaScreen({ route, navigation }) {
       try {
         const datos =
           typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-        if (datos?.tipo === "PUNTO_SELECCIONADO" && esAdmin) {
-          setCoordenadaMarcada({
-            lat: Number(datos.lat.toFixed(7)),
-            lng: Number(datos.lng.toFixed(7)),
-          });
-        } else if (datos?.tipo === "INCIDENTE_CLICKEADO") {
-          const encontrado = incidentes.find(
-            (i) => Number(i.id) === Number(datos.id),
-          );
-          if (encontrado) setIncidenteActivo(encontrado);
-        }
+        procesarEventoMapa(datos);
       } catch (e) {}
     };
 
@@ -139,7 +149,15 @@ export default function MapaScreen({ route, navigation }) {
     return () => {
       window.removeEventListener("message", handleMensajeIframe);
     };
-  }, [esAdmin, incidentes]);
+  }, [procesarEventoMapa]);
+
+  // 2. Receptor de mensajes para Móvil (WebView onMessage)
+  const handleMensajeWebView = (event) => {
+    try {
+      const datos = JSON.parse(event.nativeEvent.data);
+      procesarEventoMapa(datos);
+    } catch (e) {}
+  };
 
   useEffect(() => {
     const desuscribir = incidentesService.suscribirACambios(() => {
@@ -170,7 +188,7 @@ export default function MapaScreen({ route, navigation }) {
           return prev || primero;
         });
 
-        if (primero.lat && primero.lng && esAdmin) {
+        if (primero.lat && primero.lng && esAdmin && !coordenadaMarcada) {
           setCoordenadaMarcada({ lat: primero.lat, lng: primero.lng });
         }
       } else {
@@ -194,19 +212,27 @@ export default function MapaScreen({ route, navigation }) {
     setIncidenteActivo(inc);
     setMenuAbierto(false);
 
+    const payload = JSON.stringify({
+      tipo: "VOLAR_A_INCIDENTE",
+      id: inc.id,
+      lat: inc.lat,
+      lng: inc.lng,
+    });
+
     if (Platform.OS === "web" && typeof document !== "undefined") {
       const iframe = document.getElementById("visor-leaflet-mapa");
       if (iframe && iframe.contentWindow) {
-        iframe.contentWindow.postMessage(
-          JSON.stringify({
-            tipo: "VOLAR_A_INCIDENTE",
-            id: inc.id,
-            lat: inc.lat,
-            lng: inc.lng,
-          }),
-          "*",
-        );
+        iframe.contentWindow.postMessage(payload, "*");
       }
+    } else if (webViewRef.current) {
+      // Inyección segura en el WebView de celular
+      const jsCode = `
+        if (window.volarAIncidente) {
+          window.volarAIncidente(${inc.id}, ${inc.lat}, ${inc.lng});
+        }
+        true;
+      `;
+      webViewRef.current.injectJavaScript(jsCode);
     }
   };
 
@@ -253,7 +279,7 @@ export default function MapaScreen({ route, navigation }) {
         visible: true,
         tipo: "error",
         titulo: "Punto no marcado",
-        mensaje: "Ubica la vía antes de guardar.",
+        mensaje: "Toca el mapa para ubicar la vía antes de guardar.",
       });
       return;
     }
@@ -293,12 +319,12 @@ export default function MapaScreen({ route, navigation }) {
 
   const generarHtmlLeaflet = () => {
     const latInicial =
-      Number(incidenteActivo?.lat) ||
       Number(coordenadaMarcada?.lat) ||
+      Number(incidenteActivo?.lat) ||
       LAT_DEFAULT;
     const lngInicial =
-      Number(incidenteActivo?.lng) ||
       Number(coordenadaMarcada?.lng) ||
+      Number(incidenteActivo?.lng) ||
       LNG_DEFAULT;
 
     const jsonIncidentes = JSON.stringify(
@@ -324,9 +350,40 @@ export default function MapaScreen({ route, navigation }) {
           <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
           <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
           <style>
+            * { -webkit-tap-highlight-color: transparent; }
             html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; background: #f8fafc; }
-            .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; font-family: system-ui, sans-serif; }
-            .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; font-family: system-ui, sans-serif; }
+            .leaflet-popup-content-wrapper { border-radius: 8px; font-family: system-ui, -apple-system, sans-serif; }
+            
+            .pin-alfiler-wrapper { position: relative; width: 24px; height: 36px; }
+            .pin-bolita-roja {
+              width: 16px; height: 16px;
+              background: radial-gradient(circle at 35% 35%, #EF4444, #991B1B);
+              border: 1.5px solid #FFFFFF;
+              border-radius: 50%;
+              box-shadow: 0 3px 6px rgba(0,0,0,0.35);
+              position: absolute; top: 0; left: 4px; z-index: 2;
+            }
+            .pin-aguja-metalica {
+              width: 2.5px; height: 20px;
+              background: linear-gradient(to right, #94A3B8, #475569);
+              position: absolute; top: 15px; left: 11px; border-radius: 1px; z-index: 1;
+            }
+            .pin-sombra-base {
+              width: 8px; height: 4px;
+              background: rgba(0,0,0,0.3);
+              border-radius: 50%; position: absolute; bottom: 0; left: 8px;
+            }
+
+            .pin-admin-azul {
+              width: 20px; height: 20px;
+              background: radial-gradient(circle at 35% 35%, #38BDF8, #0284C7);
+              border: 2px solid #FFFFFF;
+              border-radius: 50%;
+              box-shadow: 0 4px 8px rgba(2, 132, 199, 0.45);
+              position: absolute; top: 0; left: 2px; z-index: 3;
+            }
+            .pop-calle { font-size: 10px; font-weight: 800; color: #DC2626; text-transform: uppercase; margin-bottom: 2px; }
+            .pop-tit { font-size: 12px; font-weight: 700; color: #0F172A; }
           </style>
         </head>
         <body>
@@ -335,12 +392,100 @@ export default function MapaScreen({ route, navigation }) {
             var esAdmin = ${esAdmin ? "true" : "false"};
             var incidentes = ${jsonIncidentes};
 
-            var map = L.map('map', { zoomControl: false }).setView([${latInicial}, ${lngInicial}], 16);
+            function despacharMensaje(payload) {
+              var str = JSON.stringify(payload);
+              // Puente para React Native WebView (Móvil)
+              if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                window.ReactNativeWebView.postMessage(str);
+              }
+              // Puente para Web estándar (iframe)
+              if (window.parent && window.parent.postMessage) {
+                window.parent.postMessage(str, '*');
+              }
+            }
+
+            var map = L.map('map', { 
+              zoomControl: false,
+              tap: true,
+              touchZoom: true
+            }).setView([${latInicial}, ${lngInicial}], 16);
+
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+            L.control.zoom({ position: 'topright' }).addTo(map);
+
+            var iconoAlfilerRojo = L.divIcon({
+              className: 'alfiler-custom',
+              html: '<div class="pin-alfiler-wrapper"><div class="pin-bolita-roja"></div><div class="pin-aguja-metalica"></div><div class="pin-sombra-base"></div></div>',
+              iconSize: [24, 36],
+              iconAnchor: [12, 35],
+              popupAnchor: [0, -32]
+            });
+
+            var iconoAdminAzul = L.divIcon({
+              className: 'admin-marker-custom',
+              html: '<div class="pin-alfiler-wrapper"><div class="pin-admin-azul"></div><div class="pin-aguja-metalica"></div><div class="pin-sombra-base"></div></div>',
+              iconSize: [24, 36],
+              iconAnchor: [12, 35],
+              popupAnchor: [0, -32]
+            });
+
+            var marcadoresIncidentes = {};
 
             incidentes.forEach(function(inc) {
-              var m = L.marker([inc.lat, inc.lng]).addTo(map);
-              m.bindPopup('<div class="pop-calle">🔴 ' + (inc.calle || '') + '</div><div class="pop-tit">' + (inc.titulo || '') + '</div>');
+              var m = L.marker([inc.lat, inc.lng], { icon: iconoAlfilerRojo }).addTo(map);
+              var popHtml = '<div class="pop-calle">🔴 ' + (inc.calle || '') + '</div><div class="pop-tit">' + (inc.titulo || '') + '</div>';
+              m.bindPopup(popHtml);
+
+              m.on('click', function() {
+                despacharMensaje({ tipo: 'INCIDENTE_CLICKEADO', id: inc.id });
+              });
+
+              marcadoresIncidentes[inc.id] = m;
+            });
+
+            var markerAdmin = null;
+
+            if (esAdmin) {
+              markerAdmin = L.marker([${latInicial}, ${lngInicial}], { 
+                icon: iconoAdminAzul,
+                draggable: true 
+              }).addTo(map);
+
+              markerAdmin.bindPopup("<b>Ubicación Seleccionada</b><br>Arrastra o toca el mapa").openPopup();
+
+              function notificarPunto(lat, lng) {
+                despacharMensaje({ tipo: 'PUNTO_SELECCIONADO', lat: lat, lng: lng });
+              }
+
+              // Evento de toque / clic en cualquier lugar del mapa
+              map.on('click', function(e) {
+                markerAdmin.setLatLng(e.latlng);
+                notificarPunto(e.latlng.lat, e.latlng.lng);
+              });
+
+              // Evento de arrastre del pin
+              markerAdmin.on('dragend', function(e) {
+                var pos = markerAdmin.getLatLng();
+                notificarPunto(pos.lat, pos.lng);
+              });
+            }
+
+            window.volarAIncidente = function(id, lat, lng) {
+              map.flyTo([lat, lng], 17, { duration: 1.2 });
+              if (marcadoresIncidentes[id]) {
+                setTimeout(function() {
+                  marcadoresIncidentes[id].openPopup();
+                }, 1200);
+              }
+            };
+
+            window.addEventListener('message', function(event) {
+              try {
+                var d = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                if (d.tipo === 'VOLAR_A_INCIDENTE') {
+                  window.volarAIncidente(d.id, d.lat, d.lng);
+                }
+              } catch(e) {}
             });
           </script>
         </body>
@@ -378,12 +523,14 @@ export default function MapaScreen({ route, navigation }) {
           />
         ) : (
           <WebView
+            ref={webViewRef}
             originWhitelist={["*"]}
             source={{ html: generarHtmlLeaflet() }}
             style={styles.iframe}
             javaScriptEnabled={true}
             domStorageEnabled={true}
             startInLoadingState={true}
+            onMessage={handleMensajeWebView}
             renderLoading={() => (
               <View style={styles.centerBox}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
@@ -392,12 +539,15 @@ export default function MapaScreen({ route, navigation }) {
           />
         )}
 
+        {/* Panel Superior: Exclusivo del Administrador */}
         {esAdmin && coordenadaMarcada && !errorConexion && (
           <View style={styles.floatingCoordBox}>
             <View style={styles.coordRow}>
               <MapPin size={18} color={COLORS.primary} strokeWidth={2.5} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.coordLabel}>Punto Seleccionado:</Text>
+                <Text style={styles.coordLabel}>
+                  Punto Marcado (Toca el mapa para mover):
+                </Text>
                 <Text style={styles.coordValue}>
                   {coordenadaMarcada.lat}, {coordenadaMarcada.lng}
                 </Text>
@@ -414,6 +564,7 @@ export default function MapaScreen({ route, navigation }) {
           </View>
         )}
 
+        {/* Acordeón Inferior de Incidentes */}
         {incidenteActivo && !errorConexion && (
           <View style={styles.floatingAccordionContainer}>
             <TouchableOpacity
