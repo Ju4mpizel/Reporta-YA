@@ -1,242 +1,199 @@
-CREATE TYPE public.rol_usuario AS ENUM ('ciudadano', 'admin');
-CREATE TYPE public.estado_usuario AS ENUM ('activo', 'suspendido', 'pendiente');
+-- ============================================================================
+-- BASE DE DATOS CANÓNICA - REPORTA YA! (DISTRITO 12 CALA CALA)
+-- ============================================================================
 
-CREATE TYPE public.categoria_reporte AS ENUM (
-  'bache_asfalto',
-  'alumbrado_publico',
-  'arbol_caido_poda',
-  'basura_acumulada',
-  'alcantarilla_desague',
-  'fuga_agua',
-  'otro'
+-- Extensión para UUIDs
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- ----------------------------------------------------------------------------
+-- 1. TABLA: roles
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.roles (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(50) NOT NULL UNIQUE,
+    descripcion TEXT
 );
 
-CREATE TYPE public.estado_reporte AS ENUM (
-  'en_revision',         
-  'realizando_trabajos', 
-  'hecho',              
-  'rechazado'            
+INSERT INTO public.roles (nombre, descripcion) VALUES
+    ('ciudadano', 'Vecino registrado del distrito'),
+    ('funcionario', 'Técnico de la subalcaldía asignado a cuadrillas'),
+    ('admin', 'Administrador de la subalcaldía municipal')
+ON CONFLICT (nombre) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- 2. TABLA: perfiles (Usuarios del sistema)
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.perfiles (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    ci VARCHAR(20) NOT NULL UNIQUE,
+    nombre_completo VARCHAR(150) NOT NULL,
+    telefono VARCHAR(20),
+    password_hash TEXT,
+    rol_id INT REFERENCES public.roles(id) DEFAULT 1,
+    activo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================================
--- 2. TABLAS GEOGRÁFICAS (ZONA Y CALLES DE CALA CALA)
--- ==========================================================
-CREATE TABLE public.zonas (
-  id SERIAL PRIMARY KEY,
-  nombre TEXT NOT NULL UNIQUE,
-  distrito INTEGER NOT NULL,
-  lat_centro DOUBLE PRECISION NOT NULL,
-  lng_centro DOUBLE PRECISION NOT NULL
+-- ----------------------------------------------------------------------------
+-- 3. TABLAS DE CATASTRO: zonas y calles
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.zonas (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL,
+    distrito INT NOT NULL DEFAULT 12,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE public.calles (
-  id SERIAL PRIMARY KEY,
-  zona_id INTEGER REFERENCES public.zonas(id) ON DELETE RESTRICT,
-  nombre TEXT NOT NULL,
-  tipo TEXT NOT NULL DEFAULT 'Calle', -- 'Avenida', 'Calle', 'Pasaje', 'Plazuela'
-  CONSTRAINT uq_calle_zona UNIQUE (nombre, zona_id)
+CREATE TABLE IF NOT EXISTS public.calles (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    tipo VARCHAR(50) DEFAULT 'calle', -- 'calle', 'avenida', 'pasaje', 'plaza'
+    zona_id INT REFERENCES public.zonas(id) ON DELETE CASCADE,
+    latitud NUMERIC(10, 7),
+    longitud NUMERIC(10, 7),
+    google_maps_url TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================================
--- 3. PERFILES DE USUARIO (CON ESTADOS Y CI)
--- ==========================================================
-CREATE TABLE public.perfiles (
-  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-  ci TEXT NOT NULL UNIQUE,
-  nombre_completo TEXT NOT NULL,
-  telefono TEXT,
-  rol public.rol_usuario NOT NULL DEFAULT 'ciudadano',
-  estado public.estado_usuario NOT NULL DEFAULT 'activo',
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+-- ----------------------------------------------------------------------------
+-- 4. TABLAS DE GESTIÓN: categorias_incidente y departamentos
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.categorias_incidente (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(100) NOT NULL UNIQUE,
+    descripcion TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================================
--- 4. TABLA DE REPORTES CIUDADANOS
--- ==========================================================
-CREATE TABLE public.reportes (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  usuario_id UUID REFERENCES public.perfiles(id) ON DELETE RESTRICT NOT NULL,
-  calle_id INTEGER REFERENCES public.calles(id) ON DELETE RESTRICT NOT NULL,
-  categoria public.categoria_reporte NOT NULL,
-  titulo VARCHAR(120) NOT NULL,
-  descripcion TEXT NOT NULL,
-  referencia_adicional TEXT,              -- Ej: "Frente a la farmacia, puerta roja"
-  latitud DOUBLE PRECISION NOT NULL,      -- Marcador GPS preciso
-  longitud DOUBLE PRECISION NOT NULL,
-  foto_url TEXT,                          -- URL del bucket en Supabase Storage
-  estado public.estado_reporte NOT NULL DEFAULT 'en_revision',
-  nota_alcaldia TEXT,                     -- Respuesta o justificación del técnico
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS public.departamentos (
+    id SERIAL PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL UNIQUE,
+    activo BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ==========================================================
--- 4b. TABLA DE APOYOS VECINALES (+1)  ·  HU05
--- ==========================================================
-CREATE TABLE public.apoyos (
-  usuario_id UUID REFERENCES public.perfiles(id) ON DELETE CASCADE NOT NULL,
-  reporte_id UUID REFERENCES public.reportes(id) ON DELETE CASCADE NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (usuario_id, reporte_id) -- Un ciudadano apoya una sola vez
+INSERT INTO public.categorias_incidente (nombre, descripcion) VALUES
+    ('Bache o asfalto deteriorado', 'Daño en calzada vehicular'),
+    ('Luminaria pública apagada', 'Postes sin iluminación nocturna'),
+    ('Alcantarilla o sumidero tapado', 'Obstrucción pluvial o drenaje'),
+    ('Acumulación de basura', 'Microbasurales no autorizados'),
+    ('Árbol o rama en riesgo', 'Peligro de caída sobre vía o tendido'),
+    ('Fuga de agua potable o alcantarillado', 'Fugas de SEMAPA o similar')
+ON CONFLICT (nombre) DO NOTHING;
+
+INSERT INTO public.departamentos (nombre, activo) VALUES
+    ('Obras Públicas y Mantenimiento Vial', true),
+    ('Alumbrado Público', true),
+    ('Medio Ambiente y Áreas Verdes', true),
+    ('Drenaje y Saneamiento Básico', true),
+    ('Defensoría y Seguridad Ciudadana', true)
+ON CONFLICT (nombre) DO NOTHING;
+
+-- ----------------------------------------------------------------------------
+-- 5. TABLA: incidentes
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.incidentes (
+    id BIGSERIAL PRIMARY KEY,
+    titulo VARCHAR(150) NOT NULL,
+    descripcion TEXT NOT NULL,
+    foto_url TEXT,
+    estado VARCHAR(50) DEFAULT 'en_revision', -- 'en_revision', 'realizando_trabajos', 'hecho', 'rechazado'
+    activo BOOLEAN DEFAULT TRUE,
+    usuario_id UUID REFERENCES public.perfiles(id) ON DELETE SET NULL,
+    calle_id INT REFERENCES public.calles(id) ON DELETE RESTRICT,
+    categoria_id INT REFERENCES public.categorias_incidente(id) ON DELETE RESTRICT,
+    departamento_id INT REFERENCES public.departamentos(id) ON DELETE SET NULL,
+    nota_alcaldia TEXT,
+    maps_url TEXT,
+    total_apoyos INT DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Índices para optimizar filtros rápidos en mapas y listados
-CREATE INDEX idx_reportes_calle ON public.reportes(calle_id);
-CREATE INDEX idx_reportes_estado ON public.reportes(estado);
-CREATE INDEX idx_reportes_usuario ON public.reportes(usuario_id);
-CREATE INDEX idx_reportes_categoria ON public.reportes(categoria);
-CREATE INDEX idx_apoyos_reporte ON public.apoyos(reporte_id);
+-- ----------------------------------------------------------------------------
+-- 6. TABLA: apoyos_incidente
+-- ----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.apoyos_incidente (
+    id BIGSERIAL PRIMARY KEY,
+    incidente_id BIGINT REFERENCES public.incidentes(id) ON DELETE CASCADE,
+    usuario_id UUID REFERENCES public.perfiles(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT uq_incidente_usuario UNIQUE (incidente_id, usuario_id)
+);
 
--- ==========================================================
--- 5. TRIGGER: CREAR PERFIL AUTOMÁTICAMENTE AL REGISTRARSE
--- Los datos llegan en raw_user_meta_data desde `authService.registrarse`
--- ==========================================================
-CREATE OR REPLACE FUNCTION public.handle_nuevo_usuario()
-RETURNS TRIGGER
+-- ----------------------------------------------------------------------------
+-- 7. FUNCIÓN RPC: toggle_apoyo (Atómico con conteo)
+-- ----------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.toggle_apoyo(p_incidente_id BIGINT, p_usuario_id UUID)
+RETURNS JSONB
 LANGUAGE plpgsql
-SECURITY DEFINER SET search_path = public
+SECURITY DEFINER
 AS $$
+DECLARE
+    v_existe BOOLEAN;
+    v_nuevo_total INT;
+    v_apoyado BOOLEAN;
 BEGIN
-  INSERT INTO public.perfiles (id, ci, nombre_completo, telefono, rol)
-  VALUES (
-    NEW.id,
-    NEW.raw_user_meta_data ->> 'ci',
-    NEW.raw_user_meta_data ->> 'nombre_completo',
-    NEW.raw_user_meta_data ->> 'telefono',
-    COALESCE((NEW.raw_user_meta_data ->> 'rol')::public.rol_usuario, 'ciudadano')
-  )
-  ON CONFLICT (id) DO NOTHING;
-  RETURN NEW;
+    SELECT EXISTS (
+        SELECT 1 FROM public.apoyos_incidente 
+        WHERE incidente_id = p_incidente_id AND usuario_id = p_usuario_id
+    ) INTO v_existe;
+
+    IF v_existe THEN
+        DELETE FROM public.apoyos_incidente 
+        WHERE incidente_id = p_incidente_id AND usuario_id = p_usuario_id;
+        
+        UPDATE public.incidentes 
+        SET total_apoyos = GREATEST(0, total_apoyos - 1),
+            updated_at = NOW()
+        WHERE id = p_incidente_id
+        RETURNING total_apoyos INTO v_nuevo_total;
+        
+        v_apoyado := false;
+    ELSE
+        INSERT INTO public.apoyos_incidente (incidente_id, usuario_id)
+        VALUES (p_incidente_id, p_usuario_id);
+        
+        UPDATE public.incidentes 
+        SET total_apoyos = total_apoyos + 1,
+            updated_at = NOW()
+        WHERE id = p_incidente_id
+        RETURNING total_apoyos INTO v_nuevo_total;
+        
+        v_apoyado := true;
+    END IF;
+
+    RETURN jsonb_build_object(
+        'apoyado', v_apoyado,
+        'total_apoyos', v_nuevo_total
+    );
 END;
 $$;
 
-DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-CREATE TRIGGER on_auth_user_created
-  AFTER INSERT ON auth.users
-  FOR EACH ROW EXECUTE FUNCTION public.handle_nuevo_usuario();
-
--- ==========================================================
--- 6. RPC: APOYO VECINAL (+1)
--- Inserta el apoyo (sin duplicados) y devuelve el total calculado
--- ==========================================================
-CREATE OR REPLACE FUNCTION public.apoyar_reporte(p_reporte_id UUID)
-RETURNS INTEGER
-LANGUAGE sql
-SECURITY DEFINER SET search_path = public
-AS $$
-  INSERT INTO public.apoyos (usuario_id, reporte_id)
-  VALUES (auth.uid(), p_reporte_id)
-  ON CONFLICT (usuario_id, reporte_id) DO NOTHING;
-  SELECT COUNT(*) FROM public.apoyos WHERE reporte_id = p_reporte_id;
-$$;
-
--- ==========================================================
--- 7. POLÍTICAS DE SEGURIDAD (ROW LEVEL SECURITY)
--- ==========================================================
+-- ----------------------------------------------------------------------------
+-- 8. POLÍTICAS RLS (Seguridad a Nivel de Fila)
+-- ----------------------------------------------------------------------------
+ALTER TABLE public.roles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.perfiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.zonas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.perfiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.reportes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.apoyos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categorias_incidente ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.departamentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.incidentes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.apoyos_incidente ENABLE ROW LEVEL SECURITY;
 
--- Catálogos: lectura pública para cualquier usuario autenticado
-CREATE POLICY "Lectura libre de zonas" ON public.zonas FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Lectura libre de calles" ON public.calles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "Lectura pública de catálogos y roles" ON public.roles FOR SELECT USING (true);
+CREATE POLICY "Lectura pública de zonas" ON public.zonas FOR SELECT USING (true);
+CREATE POLICY "Lectura pública de calles" ON public.calles FOR SELECT USING (true);
+CREATE POLICY "Admin inserta calles" ON public.calles FOR ALL USING (true);
+CREATE POLICY "Lectura pública de categorías" ON public.categorias_incidente FOR SELECT USING (true);
+CREATE POLICY "Lectura pública de departamentos" ON public.departamentos FOR SELECT USING (true);
+CREATE POLICY "Lectura y registro de perfiles" ON public.perfiles FOR ALL USING (true);
+CREATE POLICY "Acceso a incidentes" ON public.incidentes FOR ALL USING (true);
+CREATE POLICY "Acceso a apoyos" ON public.apoyos_incidente FOR ALL USING (true);
 
--- Perfiles: el usuario ve su perfil; los administradores ven y modifican todos (ej. suspender)
-CREATE POLICY "Lectura de perfiles" ON public.perfiles FOR SELECT TO authenticated USING (
-  auth.uid() = id OR EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol = 'admin')
-);
-
-CREATE POLICY "Modificacion de perfiles propio o admin" ON public.perfiles FOR UPDATE TO authenticated USING (
-  auth.uid() = id OR EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol = 'admin')
-);
-
--- Perfiles: inserción propia (respaldo, aunque el trigger ya la crea al registrarse)
-CREATE POLICY "Insercion de perfil propia" ON public.perfiles FOR INSERT TO authenticated
-WITH CHECK (auth.uid() = id);
-
--- Reportes:
--- 1. Cualquiera autenticado puede ver reportes
-CREATE POLICY "Lectura de reportes" ON public.reportes FOR SELECT TO authenticated USING (true);
-
--- 2. Solo usuarios 'activos' pueden crear reportes
-CREATE POLICY "Insertar reportes usuarios activos" ON public.reportes FOR INSERT TO authenticated
-WITH CHECK (
-  auth.uid() = usuario_id
-  AND EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND estado = 'activo')
-);
-
--- 3. Solo admins actualizan estado o notas del reporte
-CREATE POLICY "Admins actualizan reportes" ON public.reportes FOR UPDATE TO authenticated
-USING (
-  EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol = 'admin')
-);
-
--- 4. Solo admins eliminan reportes
-CREATE POLICY "Admins borran reportes" ON public.reportes FOR DELETE TO authenticated
-USING (
-  EXISTS (SELECT 1 FROM public.perfiles WHERE id = auth.uid() AND rol = 'admin')
-);
-
--- Apoyos (+1): todos los autenticados pueden leerlos; cada uno solo inserta los suyos
-CREATE POLICY "Lectura de apoyos" ON public.apoyos FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY "Insercion de apoyos propios" ON public.apoyos FOR INSERT TO authenticated
-WITH CHECK (auth.uid() = usuario_id);
-
--- ==========================================================
--- 8. DATOS INICIALES (SEED)
--- ==========================================================
--- Zona piloto: Cala Cala (coordenadas de la Plaza de Cala Cala)
-INSERT INTO public.zonas (id, nombre, distrito, lat_centro, lng_centro)
-VALUES (1, 'Cala Cala', 12, -17.373412, -66.162534)
-ON CONFLICT (id) DO NOTHING;
-
--- Calles y avenidas de Cala Cala
-INSERT INTO public.calles (zona_id, tipo, nombre) VALUES
-(1, 'Avenida', 'Libertador Bolívar'),
-(1, 'Avenida', 'América'),
-(1, 'Avenida', 'Gualberto Villarroel'),
-(1, 'Avenida', 'Melchor Pérez de Holguín'),
-(1, 'Avenida', 'Atahuallpa'),
-(1, 'Avenida', 'Juan de la Rosa'),
-(1, 'Calle',   'Man Césped'),
-(1, 'Calle',   'Huallparrimachi'),
-(1, 'Calle',   'Teniente Arévalo'),
-(1, 'Calle',   'Teudocio Carvallo'),
-(1, 'Calle',   'Nataniel Aguirre'),
-(1, 'Calle',   'Calama (Norte)'),
-(1, 'Calle',   'Goytia'),
-(1, 'Calle',   'Adela Zamudio'),
-(1, 'Calle',   'José Ballivián'),
-(1, 'Calle',   'Ramiro Condarco'),
-(1, 'Calle',   'Pantaleón Dalence'),
-(1, 'Calle',   'Isaac Tamayo'),
-(1, 'Calle',   'Gral. Inofuentes'),
-(1, 'Calle',   'Guzmán Quinteros'),
-(1, 'Calle',   'Cnl. Cornejo'),
-(1, 'Calle',   'Cnl. López'),
-(1, 'Pasaje',  'Gutiérrez'),
-(1, 'Pasaje',  'Los Álamos'),
-(1, 'Pasaje',  'Santa Ana'),
-(1, 'Plazuela', 'Plaza de Cala Cala')
-ON CONFLICT (id) DO NOTHING;
-
-
-INSERT INTO storage.buckets (id, name, public, file_size_limit)
-VALUES ('fotos-reportes', 'fotos-reportes', TRUE, 5242880)
-ON CONFLICT (id) DO NOTHING;
-
-
-CREATE POLICY "fotos lectura publica" ON storage.objects
-  FOR SELECT USING (bucket_id = 'fotos-reportes');
-
-
-CREATE POLICY "fotos subida autenticados" ON storage.objects
-  FOR INSERT TO authenticated
-  WITH CHECK (
-    bucket_id = 'fotos-reportes'
-    AND auth.uid() IS NOT NULL
-  );
+-- ----------------------------------------------------------------------------
+-- 9. HABILITAR REALTIME
+-- ----------------------------------------------------------------------------
+ALTER PUBLICATION supabase_realtime ADD TABLE public.incidentes;

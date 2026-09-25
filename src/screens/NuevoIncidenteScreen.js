@@ -23,6 +23,7 @@ import {
   Send,
   Lock,
   Camera,
+  ImageIcon,
   X,
   RefreshCw,
 } from "lucide-react-native";
@@ -56,6 +57,9 @@ export default function NuevoIncidenteScreen({ navigation }) {
   const [imagenUri, setImagenUri] = useState(null);
   const [enviando, setEnviando] = useState(false);
 
+  // Modal para seleccionar origen de la fotografía (Cámara o Galería)
+  const [modalFotoVisible, setModalFotoVisible] = useState(false);
+
   const [alerta, setAlerta] = useState({
     visible: false,
     tipo: "exito",
@@ -78,7 +82,6 @@ export default function NuevoIncidenteScreen({ navigation }) {
     cargarDatosIniciales();
   }, []);
 
-  // Recarga reactiva cuando se recupera la conexión a internet
   useEffect(() => {
     const handleReconexion = () => {
       cargarDatosIniciales();
@@ -154,7 +157,38 @@ export default function NuevoIncidenteScreen({ navigation }) {
     setAcordeonAbierto((prev) => (prev === seccion ? null : seccion));
   };
 
-  const seleccionarImagen = async () => {
+  const capturarDesdeCamara = async () => {
+    setModalFotoVisible(false);
+    try {
+      const permiso = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permiso.granted) {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Permiso de Cámara Denegado",
+          mensaje:
+            "Se requiere autorización para abrir la cámara y fotografiar la incidencia.",
+          onConfirmar: null,
+        });
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setImagenUri(result.assets[0].uri);
+      }
+    } catch (error) {
+      console.warn("Aviso cámara:", error.message);
+    }
+  };
+
+  const seleccionarDeGaleria = async () => {
+    setModalFotoVisible(false);
     try {
       const permiso = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permiso.granted) {
@@ -163,7 +197,7 @@ export default function NuevoIncidenteScreen({ navigation }) {
           tipo: "error",
           titulo: "Permiso Denegado",
           mensaje:
-            "Se requiere permiso para acceder a la galería y adjuntar fotografías evidenciales.",
+            "Se requiere autorización para acceder a la galería y adjuntar fotografías.",
           onConfirmar: null,
         });
         return;
@@ -180,7 +214,7 @@ export default function NuevoIncidenteScreen({ navigation }) {
         setImagenUri(result.assets[0].uri);
       }
     } catch (error) {
-      console.warn("Aviso selección de imagen:", error.message);
+      console.warn("Aviso galería:", error.message);
     }
   };
 
@@ -232,15 +266,18 @@ export default function NuevoIncidenteScreen({ navigation }) {
       setEnviando(true);
 
       let tieneInternet = true;
-      if (Platform.OS === "web" && typeof navigator !== "undefined") {
-        tieneInternet = navigator.onLine === true;
-      }
-
-      if (tieneInternet) {
-        const netState = await NetInfo.fetch();
-        tieneInternet = Boolean(
-          netState.isConnected && netState.isInternetReachable !== false,
-        );
+      try {
+        if (Platform.OS === "web" && typeof navigator !== "undefined") {
+          tieneInternet = navigator.onLine === true;
+        }
+        if (tieneInternet) {
+          const netState = await NetInfo.fetch();
+          tieneInternet = Boolean(
+            netState.isConnected && netState.isInternetReachable !== false,
+          );
+        }
+      } catch {
+        tieneInternet = false;
       }
 
       if (tieneInternet) {
@@ -733,7 +770,7 @@ export default function NuevoIncidenteScreen({ navigation }) {
               />
             </View>
 
-            {/* FOTOGRAFÍA EVIDENCIAL */}
+            {/* FOTOGRAFÍA EVIDENCIAL (CÁMARA O GALERÍA) */}
             <View style={styles.inputGroup}>
               <Text
                 style={[
@@ -764,13 +801,13 @@ export default function NuevoIncidenteScreen({ navigation }) {
                     styles.btnSelectImage,
                     pasoDetallesBloqueado && styles.inputDisabled,
                   ]}
-                  onPress={seleccionarImagen}
+                  onPress={() => setModalFotoVisible(true)}
                   disabled={pasoDetallesBloqueado}
                   activeOpacity={0.7}
                 >
                   <Camera size={18} color={COLORS.primary} strokeWidth={2.2} />
                   <Text style={styles.btnSelectImageText}>
-                    Adjuntar foto desde galería
+                    Adjuntar foto (Cámara o Galería)
                   </Text>
                 </TouchableOpacity>
               )}
@@ -806,6 +843,18 @@ export default function NuevoIncidenteScreen({ navigation }) {
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
+
+      {/* Selector de origen fotográfico */}
+      <CustomModalAlert
+        visible={modalFotoVisible}
+        tipo="confirmar"
+        titulo="Adjuntar Fotografía"
+        mensaje="Selecciona si deseas tomar una foto en el momento o subirla desde tu galería."
+        textoBotonConfirmar="Tomar Foto (Cámara)"
+        textoBotonCancelar="Elegir de Galería"
+        onConfirmar={capturarDesdeCamara}
+        onCancelar={seleccionarDeGaleria}
+      />
 
       {/* Alerta Institucional Reutilizable */}
       <CustomModalAlert

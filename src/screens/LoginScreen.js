@@ -13,14 +13,35 @@ import {
   ScrollView,
   Image,
 } from "react-native";
-import { LogIn, FileText, Lock } from "lucide-react-native";
+import {
+  LogIn,
+  FileText,
+  Lock,
+  ChevronDown,
+  ChevronUp,
+  Check,
+} from "lucide-react-native";
 import { useAuth } from "../context/AuthContext";
 import CustomModalAlert from "../components/CustomModalAlert";
 import { COLORS, RADIUS, SPACING } from "../constants/theme";
 
+const EXPEDICIONES = [
+  { sigla: "CB", nombre: "Cochabamba" },
+  { sigla: "LP", nombre: "La Paz" },
+  { sigla: "SC", nombre: "Santa Cruz" },
+  { sigla: "OR", nombre: "Oruro" },
+  { sigla: "PT", nombre: "Potosí" },
+  { sigla: "CH", nombre: "Chuquisaca" },
+  { sigla: "TJ", nombre: "Tarija" },
+  { sigla: "BE", nombre: "Beni" },
+  { sigla: "PA", nombre: "Pando" },
+];
+
 export default function LoginScreen({ navigation }) {
   const { login, cargando } = useAuth();
-  const [ci, setCi] = useState("");
+  const [ciNumero, setCiNumero] = useState("");
+  const [expedicion, setExpedicion] = useState("CB");
+  const [menuExpedicionAbierto, setMenuExpedicionAbierto] = useState(false);
   const [password, setPassword] = useState("");
 
   const [alerta, setAlerta] = useState({
@@ -49,6 +70,11 @@ export default function LoginScreen({ navigation }) {
     ]).start();
   }, []);
 
+  const handleCiChange = (texto) => {
+    const soloNumeros = texto.replace(/[^0-9]/g, "").slice(0, 8);
+    setCiNumero(soloNumeros);
+  };
+
   const handlePressIn = () => {
     Animated.spring(scaleBtn, {
       toValue: 0.96,
@@ -66,19 +92,21 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleLogin = async () => {
-    if (!ci.trim() || !password.trim()) {
+    if (!ciNumero.trim() || !password.trim()) {
       setAlerta({
         visible: true,
         tipo: "error",
         titulo: "Campos Requeridos",
         mensaje:
-          "Por favor ingresa tu cédula de identidad y tu contraseña de acceso.",
+          "Por favor ingresa tu número de cédula de identidad y tu contraseña de acceso.",
       });
       return;
     }
 
+    const ciCompleto = `${ciNumero.trim()} ${expedicion}`;
+
     try {
-      await login(ci, password);
+      await login(ciCompleto, password);
     } catch (err) {
       setAlerta({
         visible: true,
@@ -125,25 +153,98 @@ export default function LoginScreen({ navigation }) {
               incidentes
             </Text>
 
+            {/* Input compuesto de Cédula de Identidad con Selector */}
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Cédula de Identidad (CI)</Text>
-              <View style={styles.inputWrapper}>
-                <FileText
-                  size={16}
-                  color={COLORS.textMuted}
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Ej: 7894561 CB"
-                  placeholderTextColor={COLORS.textSubtle}
-                  value={ci}
-                  onChangeText={setCi}
-                  autoCapitalize="none"
-                />
+              <View style={styles.labelRow}>
+                <Text style={styles.inputLabel}>Cédula de Identidad (CI)</Text>
+                <Text style={styles.previewCiText}>
+                  Ingresará como: {ciNumero || "••••••"} {expedicion}
+                </Text>
               </View>
+
+              <View style={styles.ciCompositeRow}>
+                <View style={[styles.inputWrapper, styles.ciInputWrapper]}>
+                  <FileText
+                    size={16}
+                    color={COLORS.textMuted}
+                    style={styles.inputIcon}
+                  />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Número (ej: 9316163)"
+                    placeholderTextColor={COLORS.textSubtle}
+                    value={ciNumero}
+                    onChangeText={handleCiChange}
+                    keyboardType="numeric"
+                    maxLength={8}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[
+                    styles.expedicionTrigger,
+                    menuExpedicionAbierto && styles.expedicionTriggerActive,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={() => setMenuExpedicionAbierto((prev) => !prev)}
+                >
+                  <Text style={styles.expedicionTriggerText}>{expedicion}</Text>
+                  {menuExpedicionAbierto ? (
+                    <ChevronUp
+                      size={14}
+                      color={COLORS.primary}
+                      strokeWidth={2.4}
+                    />
+                  ) : (
+                    <ChevronDown
+                      size={14}
+                      color={COLORS.textDark}
+                      strokeWidth={2.4}
+                    />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* Menú selector de departamentos emisores */}
+              {menuExpedicionAbierto && (
+                <View style={styles.dropdownDepartamentos}>
+                  <Text style={styles.dropdownTitle}>Lugar de Expedición:</Text>
+                  <View style={styles.gridExpediciones}>
+                    {EXPEDICIONES.map((item) => {
+                      const esSeleccionado = expedicion === item.sigla;
+                      return (
+                        <TouchableOpacity
+                          key={item.sigla}
+                          style={[
+                            styles.chipExpedicion,
+                            esSeleccionado && styles.chipExpedicionActive,
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            setExpedicion(item.sigla);
+                            setMenuExpedicionAbierto(false);
+                          }}
+                        >
+                          {esSeleccionado && (
+                            <Check size={11} color="#FFFFFF" strokeWidth={3} />
+                          )}
+                          <Text
+                            style={[
+                              styles.chipExpedicionText,
+                              esSeleccionado && styles.chipExpedicionTextActive,
+                            ]}
+                          >
+                            {item.sigla} ({item.nombre})
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
             </View>
 
+            {/* Input de Contraseña */}
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Contraseña</Text>
               <View style={styles.inputWrapper}>
@@ -163,6 +264,7 @@ export default function LoginScreen({ navigation }) {
               </View>
             </View>
 
+            {/* Botón de Ingreso */}
             <Animated.View style={{ transform: [{ scale: scaleBtn }] }}>
               <TouchableOpacity
                 style={[styles.btnSubmit, cargando && styles.btnDisabled]}
@@ -198,7 +300,7 @@ export default function LoginScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
-            {/* Sello de Alianza con la Alcaldía */}
+            {/* Sello Institucional */}
             <View style={styles.cochaFooter}>
               <Image
                 source={require("../../assets/logo-alcaldia.png")}
@@ -273,11 +375,94 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
   inputGroup: { marginBottom: SPACING.md },
+  labelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
   inputLabel: {
     fontSize: 11,
     fontWeight: "700",
     color: COLORS.textDark,
-    marginBottom: 4,
+  },
+  previewCiText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: COLORS.primary,
+  },
+  ciCompositeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  ciInputWrapper: {
+    flex: 1,
+  },
+  expedicionTrigger: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    height: 42,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
+    backgroundColor: "#F8FAFC",
+  },
+  expedicionTriggerActive: {
+    borderColor: COLORS.primary,
+    backgroundColor: "#F0F9FF",
+  },
+  expedicionTriggerText: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: COLORS.textDark,
+  },
+  dropdownDepartamentos: {
+    marginTop: 8,
+    backgroundColor: "#F8FAFC",
+    borderRadius: RADIUS.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 10,
+  },
+  dropdownTitle: {
+    fontSize: 9.5,
+    fontWeight: "800",
+    color: COLORS.textMuted,
+    textTransform: "uppercase",
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  gridExpediciones: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  chipExpedicion: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: COLORS.borderLight,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: RADIUS.sm,
+  },
+  chipExpedicionActive: {
+    backgroundColor: COLORS.primaryDark,
+    borderColor: COLORS.primaryDark,
+  },
+  chipExpedicionText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.textDark,
+  },
+  chipExpedicionTextActive: {
+    color: "#FFFFFF",
   },
   inputWrapper: {
     flexDirection: "row",
