@@ -9,27 +9,45 @@ export const incidentesService = {
   async subirACloudinary(localUri) {
     if (!localUri) return null;
 
+    // Si ya fue subida a la nube previamente, retornar la URL intacta
+    if (
+      typeof localUri === "string" &&
+      (localUri.startsWith("http://") || localUri.startsWith("https://"))
+    ) {
+      return localUri;
+    }
+
     try {
       const formData = new FormData();
 
-      // 1. Caso Web con Blobs nativos
-      if (Platform.OS === "web" && localUri.startsWith("blob:")) {
-        const respuesta = await fetch(localUri);
-        const blob = await respuesta.blob();
-        formData.append("file", blob);
+      // 1. Caso Web: conversión segura a Blob
+      if (Platform.OS === "web") {
+        if (localUri.startsWith("data:")) {
+          formData.append("file", localUri);
+        } else {
+          try {
+            const respuesta = await fetch(localUri);
+            const blob = await respuesta.blob();
+            formData.append("file", blob, `evidencia_${Date.now()}.jpg`);
+          } catch {
+            formData.append("file", localUri);
+          }
+        }
       }
-      // 2. Caso Base64 (Universal y compatible con Android/iOS sin error de FormDataPart)
-      else if (localUri.startsWith("data:")) {
-        formData.append("file", localUri);
-      }
-      // 3. Fallback para URIs de archivo estándar
+      // 2. Caso Móvil (Android / iOS): formato multipart estándar de React Native
       else {
-        const extension = localUri.split(".").pop() || "jpg";
-        formData.append("file", {
-          uri: localUri,
-          type: `image/${extension === "png" ? "png" : "jpeg"}`,
-          name: `evidencia_${Date.now()}.${extension}`,
-        });
+        if (localUri.startsWith("data:")) {
+          formData.append("file", localUri);
+        } else {
+          const extension = localUri.split(".").pop() || "jpg";
+          const mimeType =
+            extension.toLowerCase() === "png" ? "image/png" : "image/jpeg";
+          formData.append("file", {
+            uri: localUri,
+            type: mimeType,
+            name: `evidencia_${Date.now()}.${extension}`,
+          });
+        }
       }
 
       formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
@@ -45,11 +63,22 @@ export const incidentesService = {
         },
       );
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(
+          data.error?.message || `Error de Cloudinary (HTTP ${res.status})`,
+        );
+      }
+
       return data.secure_url || null;
     } catch (err) {
-      console.error("Error al subir a Cloudinary:", err.message);
-      return null;
+      console.warn(
+        "[incidentesService.subirACloudinary] Fallo en la subida:",
+        err.message,
+      );
+      // Propagar el error para que el flujo offline o NuevoIncidenteScreen capture el fallo de conexión
+      throw err;
     }
   },
 
@@ -228,9 +257,7 @@ export const incidentesService = {
   },
 
   suscribirACambios(callback) {
-    const channelId = `realtime-incidentes-${Math.random()
-      .toString(36)
-      .substring(2, 9)}`;
+    const channelId = `realtime-incidentes-${Math.random().toString(36).substring(2, 9)}`;
     const canal = supabase
       .channel(channelId)
       .on(

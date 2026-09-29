@@ -12,6 +12,18 @@ export class CrearIncidenteCommand {
   }
 
   async execute() {
+    // Si la foto es una URI local y no se ha subido aún a Cloudinary
+    if (
+      this.payload.fotoLocalUri &&
+      !this.payload.fotoLocalUri.startsWith("http://") &&
+      !this.payload.fotoLocalUri.startsWith("https://")
+    ) {
+      const urlRemota = await incidentesService.subirACloudinary(
+        this.payload.fotoLocalUri,
+      );
+      this.payload.fotoLocalUri = urlRemota;
+    }
+
     return await incidentesService.crear(this.payload);
   }
 

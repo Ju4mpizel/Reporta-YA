@@ -214,10 +214,21 @@ export default function NuevoIncidenteScreen({ navigation }) {
 
     try {
       setEnviando(true);
-      let tieneInternet =
-        Platform.OS === "web"
-          ? typeof navigator !== "undefined" && navigator.onLine
-          : (await NetInfo.fetch()).isConnected;
+      let tieneInternet = true;
+
+      try {
+        if (Platform.OS === "web" && typeof navigator !== "undefined") {
+          tieneInternet = navigator.onLine === true;
+        }
+        if (tieneInternet) {
+          const netState = await NetInfo.fetch();
+          tieneInternet = Boolean(
+            netState.isConnected && netState.isInternetReachable !== false,
+          );
+        }
+      } catch {
+        tieneInternet = false;
+      }
 
       if (tieneInternet) {
         await comando.execute();
@@ -237,17 +248,41 @@ export default function NuevoIncidenteScreen({ navigation }) {
           tipo: "info",
           titulo: "Reporte Guardado en Cola",
           mensaje:
-            "Sin conexión. Se enviará automáticamente cuando recuperes red.",
+            "Sin conexión a internet. Tu reporte y evidencia se guardaron localmente y se enviarán automáticamente al recuperar red.",
           onConfirmar: () => navigation.navigate("Incidentes"),
         });
       }
     } catch (err) {
-      setAlerta({
-        visible: true,
-        tipo: "error",
-        titulo: "Error al enviar",
-        mensaje: err.message || "No se pudo procesar el reporte.",
-      });
+      const msg = (err.message || "").toLowerCase();
+      const esErrorDeRed =
+        msg.includes("failed to fetch") ||
+        msg.includes("network") ||
+        msg.includes("timeout") ||
+        msg.includes("abort") ||
+        (Platform.OS === "web" &&
+          typeof navigator !== "undefined" &&
+          !navigator.onLine);
+
+      if (esErrorDeRed) {
+        // Si falló la subida a Cloudinary o Supabase por corte de red, encolar como offline
+        await commandQueueService.encolar(comando);
+        limpiarFormulario();
+        setAlerta({
+          visible: true,
+          tipo: "info",
+          titulo: "Reporte Guardado en Cola",
+          mensaje:
+            "La conexión se interrumpió durante el envío. Tu reporte y evidencia fueron guardados localmente y se sincronizarán de forma automática.",
+          onConfirmar: () => navigation.goBack(),
+        });
+      } else {
+        setAlerta({
+          visible: true,
+          tipo: "error",
+          titulo: "Error al enviar",
+          mensaje: err.message || "No se pudo procesar el reporte.",
+        });
+      }
     } finally {
       setEnviando(false);
     }
